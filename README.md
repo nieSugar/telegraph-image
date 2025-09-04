@@ -60,3 +60,7 @@ export default tseslint.config([
   },
 ])
 ```
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=nieSugar/telegraph-image&type=Date)](https://www.star-history.com/#nieSugar/telegraph-image&Date)
