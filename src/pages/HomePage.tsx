@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { Box, Heading, Text, FileInput, Button, Card } from 'grommet';
-import { Upload } from 'grommet-icons';
+import { Box, Heading, Text, FileInput, Button, Card, Notification } from 'grommet';
+import { Copy, Upload } from 'grommet-icons';
 
 const HomePage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+  const [uploadedUrls, setUploadedUrl] = useState<string[]>([]);
+  const [copyVisible, setCopyVisible] = useState(false);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
       setFile(files[0]);
-      setUploadedUrl(null);
+      setUploadedUrl([]);
     }
   };
 
@@ -21,7 +22,7 @@ const HomePage: React.FC = () => {
     setIsUploading(true);
     try {
       const mockUrl = URL.createObjectURL(file);
-      setUploadedUrl(mockUrl);
+      setUploadedUrl([mockUrl]);
     } catch (error) {
       console.error('Upload failed:', error);
     } finally {
@@ -29,12 +30,17 @@ const HomePage: React.FC = () => {
     }
   };
 
+  const handleCopyClick = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopyVisible(true);
+  };
+
+
   return (
     <Box fill align="center" justify="center" pad="large" background={"url(https://rand-img.kidwen.top?rand=true)"}>
       <Card width="large" pad="medium">
         <Box align="center" gap="medium">
           <Heading level={2}>Telegraph Image</Heading>
-          <Text>上传图片获取永久链接</Text>
           
           <Box width="medium">
             <FileInput
@@ -50,7 +56,6 @@ const HomePage: React.FC = () => {
           
           {file && (
             <Box align="center" gap="small">
-              <Text>已选择: {file.name}</Text>
               <Button 
                 icon={<Upload />} 
                 label="上传图片" 
@@ -61,24 +66,36 @@ const HomePage: React.FC = () => {
             </Box>
           )}
 
-          {uploadedUrl && (
+          {uploadedUrls.length > 0 && (
             <Box align="center" gap="small">
-              <Text weight="bold">上传成功!</Text>
-              <Box height="small" width="small">
-                <img src={uploadedUrl} alt="Uploaded" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              </Box>
+              <Text weight="bold" color={"rgb(111, 255, 176)"}>上传成功!</Text>
               <Box direction="row" gap="small">
-                <Text>{uploadedUrl}</Text>
-                <Button 
-                  label="复制链接" 
-                  onClick={() => navigator.clipboard.writeText(uploadedUrl)}
-                  size="small"
-                />
+                {uploadedUrls.map((url, index) => (
+                  <Box key={index} direction="row" gap="small">
+                    <Text alignSelf="center">{url}</Text>
+                    <Button
+                      icon={<Copy />}
+                      onClick={() => handleCopyClick(url)}
+                      size="small"
+                    />
+                  </Box>
+                ))}
               </Box>
             </Box>
           )}
         </Box>
       </Card>
+
+      {copyVisible && (
+        <Notification
+          toast
+          global={true}
+          status='normal'
+          time={1000}
+          title="Copy successful"
+          onClose={() => setCopyVisible(false)}
+        />
+      )}
     </Box>
   );
 };
