@@ -30,7 +30,7 @@ const HomePage: React.FC = () => {
   };
 
   return (
-    <Box fill align="center" justify="center" pad="large">
+    <Box fill align="center" justify="center" pad="large" background={"url(https://rand-img.kidwen.top?rand=true)"}>
       <Card width="large" pad="medium">
         <Box align="center" gap="medium">
           <Heading level={2}>Telegraph Image</Heading>
