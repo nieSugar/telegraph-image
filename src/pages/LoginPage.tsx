@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Form, FormField, TextInput, Button, Heading, Text, Card } from 'grommet';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { useAuth } from '../contexts/useAuth';
 import { isAuthenticated } from '../utils/authUtils';
 
@@ -8,21 +9,20 @@ const LoginPage: React.FC = () => {
   const [formValues, setFormValues] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
   const { login, isAuthenticated: authContextAuthenticated } = useAuth();
   
   // 获取用户原本想要访问的页面路径，如果没有则默认为管理页面
-  const from = location.state?.from?.pathname || '/admin';
+  const returnUrl = router.query.returnUrl as string || '/admin';
 
   // 检查用户是否已经登录，如果已登录则重定向到管理页面
   useEffect(() => {
     // 同时检查 Context 和 localStorage 中的登录状态
     const authenticated = authContextAuthenticated || isAuthenticated();
     if (authenticated) {
-      navigate('/admin', { replace: true });
+      router.replace('/admin');
     }
-  }, [navigate, authContextAuthenticated]);
+  }, [router, authContextAuthenticated]);
 
   const handleSubmit = async (event: { value: typeof formValues }) => {
     setIsLoading(true);
@@ -34,7 +34,7 @@ const LoginPage: React.FC = () => {
       
       if (success) {
         // 登录成功，重定向回用户原本想要访问的页面
-        navigate(from, { replace: true });
+        router.replace(returnUrl);
       } else {
         setError('用户名或密码错误');
       }
@@ -56,9 +56,9 @@ const LoginPage: React.FC = () => {
             <Text color="status-critical">{error}</Text>
           )}
           
-          {from !== '/admin' && from !== '/' && (
+          {returnUrl !== '/admin' && returnUrl !== '/' && (
             <Text size="small" color="neutral-4">
-              请登录后继续访问: {from}
+              请登录后继续访问: {returnUrl}
             </Text>
           )}
           
@@ -77,7 +77,12 @@ const LoginPage: React.FC = () => {
             
             <Box direction="row" gap="medium" margin={{ top: 'medium' }} justify="between">
               <Button type="submit" primary label="登录" disabled={isLoading} />
-              <Link to="/">返回首页</Link>
+              <Button 
+                as={Link}
+                href="/"
+                label="返回首页" 
+                plain 
+              />
             </Box>
           </Form>
         </Box>

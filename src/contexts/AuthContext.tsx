@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import { AuthContext } from './AuthContextType';
 import { isAuthenticated as checkAuth, saveAuthState } from '../utils/authUtils';
 
 // 上下文提供者组件
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // 初始状态直接从 localStorage 获取
-  const [isAuthenticated, setIsAuthenticated] = useState(checkAuth());
-  const navigate = useNavigate();
+  // 初始状态，在客户端时直接从 localStorage 获取
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const router = useRouter();
 
-  // 添加 localStorage 变化的事件监听
+  // 在客户端渲染时初始化认证状态
   useEffect(() => {
+    setIsAuthenticated(checkAuth());
+    
+    // 添加 localStorage 变化的事件监听
     const handleStorageChange = () => {
       setIsAuthenticated(checkAuth());
     };
@@ -26,15 +29,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // 登录函数
   const login = async (username: string, password: string): Promise<boolean> => {
-    // 模拟登录验证
-    if (username === 'admin' && password === 'password') {
-      // 存储登录状态
-      saveAuthState(true);
-      // 同步更新状态
-      setIsAuthenticated(true);
-      return true;
+    // 调用登录API
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // 存储登录状态
+        saveAuthState(true);
+        // 同步更新状态
+        setIsAuthenticated(true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Login error:', error);
+      return false;
     }
-    return false;
   };
 
   // 登出函数
@@ -44,7 +62,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 同步更新状态
     setIsAuthenticated(false);
     // 导航到登录页
-    navigate('/login');
+    router.push('/login');
   };
 
   return (
