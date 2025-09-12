@@ -16,8 +16,7 @@ export default function handler(
   // 获取请求中的用户名和密码
   const { username, password } = req.body;
 
-  // 简单的验证逻辑（生产环境中应该使用更安全的方式）
-  if (username === 'admin' && password === 'password') {
+  if (username === process.env.USER_NAME && password === process.env.PASSWORD) {
     // 登录成功
     return res.status(200).json({ success: true });
   }

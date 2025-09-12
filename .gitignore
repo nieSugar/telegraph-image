@@ -27,3 +27,4 @@ yarn.lock
 *.sw?
 tmp
 .next
+.env.local

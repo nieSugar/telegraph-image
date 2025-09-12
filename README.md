@@ -4,6 +4,16 @@
 
 Telegraph Image 是一个用于图片上传与管理的网络应用。用户可以轻松上传图片到Telegraph服务并获取永久链接，方便在各种平台分享和使用。
 
+## 部署Vercel
+1. 进入vercel dashboard中点击Add New
+1. 点击 Import Third-Party Git Repository
+1. 输入 https://github.com/nieSugar/telegraph-image 并点击 Continue
+1. 点击 Create 等待完成
+1. 点击 COntinue to Dashboard 进入
+1. 点击 Setting => Environments 环境变量
+USER_NAME
+PASSWORD
+
 ## 功能特点
 
 - 简洁的用户界面
