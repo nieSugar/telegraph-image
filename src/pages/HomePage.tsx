@@ -56,8 +56,28 @@ const HomePage: React.FC = () => {
   };
 
   return (
-    <Box fill align="center" justify="center" pad="large" background={"url(https://rand-img.kidwen.top?rand=true)"}>
-      <Card width="large" pad="medium">
+    <Box
+      fill
+      align="center"
+      justify="center"
+      pad="large"
+      background={{
+        color: '#1e3144ff',
+        image: 'url(https://rand-img.kidwen.top?rand=true)'
+      }}
+    >
+      <Card
+        width="large"
+        pad="medium"
+        style={{
+          background: 'rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.18)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(255, 255, 255, 0.3)'
+        }}
+      >
         <Box align="center" gap="medium">
           <Heading level={2}>Telegraph Image</Heading>
           
