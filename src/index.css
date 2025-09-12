@@ -1,0 +1,21 @@
+/* Base styles to avoid FOUC and layout shift */
+html, body, #__next {
+	height: 100%;
+}
+body {
+	margin: 0;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+	font-family: 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+	color: #1f2933;
+	transition: background 0.4s cubic-bezier(.4,0,.2,1);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+::selection {
+	background: rgba(142, 197, 252, 0.5);
+}
