@@ -11,11 +11,14 @@ const HomePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+    const input = event.target as HTMLInputElement;
+    const files = input.files;
     if (files && files.length > 0) {
       setFile(files[0]);
       setUploadedUrls([]);
       setError(null);
+    } else {
+      setFile(null);
     }
   };
 
@@ -85,6 +88,7 @@ const HomePage: React.FC = () => {
             <FileInput
               multiple={false}
               messages={{
+                dropPrompt: '拖放文件到这里或点击选择',
                 dropPromptMultiple: '拖放文件到这里或点击选择',
                 browse: '选择文件'
               }}
