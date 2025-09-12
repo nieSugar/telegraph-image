@@ -1,0 +1,10 @@
+{
+  "name": "Telegraph Image",
+  "short_name": "TelegraphImg",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "64x64", "type": "image/svg+xml" }
+  ],
+  "theme_color": "#e0c3fc",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}

@@ -31,7 +31,12 @@ export default class MyDocument extends Document {
     return (
       <Html lang="zh-CN">
         <Head>
+          <title>Telegraph Image</title>
           <meta name="theme-color" content="#e0c3fc" />
+          <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+          <link rel="icon" href="/favicon.ico" />
+          <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+          <link rel="manifest" href="/site.webmanifest" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
           <link
