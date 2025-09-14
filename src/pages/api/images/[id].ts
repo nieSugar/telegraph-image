@@ -57,8 +57,7 @@ export default async function handler(
           });
         }
 
-        // 更新访问计数
-        await db.updateAccessCount(imageId);
+        // 按需移除访问计数统计
 
         return res.status(200).json({
           success: true,

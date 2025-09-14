@@ -3,6 +3,7 @@ import { formidable } from 'formidable';
 import fs from 'fs';
 import path from 'path';
 import { D1ImageDB, ImageRecord, createD1Connection } from '../../../utils/db';
+import { uploadFileToTelegram } from '../../../services/telegram';
 
 // 禁用Next.js的默认body解析，以支持form-data
 export const config = {
@@ -20,6 +21,10 @@ type UploadResponseData = {
     name: string;
     file_size: number;
     file_format: string;
+    telegram?: {
+      chat_id: string;
+      message_id: number;
+    };
   }[];
   message?: string;
 };
@@ -106,9 +111,75 @@ export default async function handler(
     const uploadedUrls: string[] = [];
     const uploadedImages: UploadResponseData['images'] = [];
 
-    // 处理每个上传的文件
-    for (const file of fileArray) {
-      if (!file) continue;
+    // 如果提供 base64 字段（data URL 或纯 base64），优先使用
+    const base64Field = Array.isArray(fields.base64) ? fields.base64[0] : fields.base64;
+    if (base64Field && typeof base64Field === 'string') {
+      const match = base64Field.match(/^data:(.*?);base64,(.*)$/);
+      const base64Data = match ? match[2] : base64Field;
+      const mime = match ? match[1] : 'image/jpeg';
+      const buffer = Buffer.from(base64Data, 'base64');
+      const ext = mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : mime.includes('gif') ? '.gif' : '.jpg';
+      const originalFilename = `base64${ext}`;
+      const uniqueFileName = generateUniqueFileName(originalFilename);
+      const fileSize = buffer.byteLength;
+      const fileFormat = ext.replace('.', '');
+
+      const tags = Array.isArray(fields.tags) ? fields.tags[0] : fields.tags || null;
+      const descriptionField = Array.isArray(fields.description) ? fields.description[0] : fields.description || null;
+      const isPublic = Array.isArray(fields.isPublic) ? fields.isPublic[0] !== 'false' : fields.isPublic !== 'false';
+      const caption = descriptionField || uniqueFileName;
+
+      // 直传 Telegram，获取 message 信息
+      const tgRes = await uploadFileToTelegram(buffer, mime, uniqueFileName, caption || undefined);
+      // 构造可引用 URL（如果你有自己的文件访问路由，可替换）
+      const uploadUrl = tgRes.file?.file_id ? `/api/cfile/${tgRes.file.file_id}` : await uploadToTelegraph(buffer, uniqueFileName);
+
+      const imageRecord: Omit<ImageRecord, 'id' | 'upload_time' | 'created_at' | 'updated_at'> = {
+        name: uniqueFileName,
+        original_name: originalFilename,
+        url: uploadUrl,
+        file_path: `/uploads/${uniqueFileName}`,
+        file_format: fileFormat,
+        file_size: fileSize,
+        is_deleted: false,
+        tags: tags || null,
+        description: descriptionField || null,
+        is_public: isPublic
+      };
+
+      const imageId = await db.insertImage(imageRecord);
+
+      let telegramInfo: { chat_id: string; message_id: number } | undefined;
+      try {
+        // 将 Telegram 字段直接落入 img 表
+        await db.updateImageTelegramInfo(imageId, {
+          tg_message_id: tgRes.messageId ?? null,
+          tg_file_id: tgRes.file?.file_id ?? null,
+          tg_file_path: tgRes.filePath ?? null,
+          tg_endpoint: tgRes.endpoint ?? null,
+          tg_field_name: tgRes.fieldName ?? null,
+          tg_file_name: tgRes.file?.file_name ?? null,
+        });
+        if (tgRes.chatId && tgRes.messageId) {
+          telegramInfo = { chat_id: tgRes.chatId, message_id: tgRes.messageId };
+        }
+      } catch (tgErr) {
+        console.error('Telegram send/store error:', tgErr);
+      }
+
+      uploadedUrls.push(uploadUrl);
+      uploadedImages?.push({
+        id: imageId,
+        url: uploadUrl,
+        name: uniqueFileName,
+        file_size: fileSize,
+        file_format: fileFormat,
+        telegram: telegramInfo
+      });
+    } else {
+      // 处理每个上传的文件
+      for (const file of fileArray) {
+        if (!file) continue;
 
       try {
         // 读取文件
@@ -121,12 +192,17 @@ export default async function handler(
         const fileSize = file.size || 0;
         const fileFormat = path.extname(originalFilename).toLowerCase().substring(1);
 
-        // 上传到Telegraph（或其他图床）
-        const uploadUrl = await uploadToTelegraph(fileData, uniqueFileName);
+        // 直传 Telegram，获取 message 信息
+        const mime = file.mimetype || 'image/jpeg';
+        const descriptionField = Array.isArray(fields.description) ? fields.description[0] : fields.description || null;
+        const caption = descriptionField || uniqueFileName;
+        const tgRes = await uploadFileToTelegram(fileData, mime, uniqueFileName, caption || undefined);
+        // 构造可引用 URL（如果你有自己的文件访问路由，可替换）
+        const uploadUrl = tgRes.file?.file_id ? `/api/cfile/${tgRes.file.file_id}` : await uploadToTelegraph(fileData, uniqueFileName);
         
         // 从表单字段获取额外信息
         const tags = Array.isArray(fields.tags) ? fields.tags[0] : fields.tags || null;
-        const description = Array.isArray(fields.description) ? fields.description[0] : fields.description || null;
+        const description = descriptionField;
         const isPublic = Array.isArray(fields.isPublic) 
           ? fields.isPublic[0] !== 'false' 
           : fields.isPublic !== 'false';
@@ -140,7 +216,6 @@ export default async function handler(
           file_format: fileFormat,
           file_size: fileSize,
           is_deleted: false,
-          access_count: 0,
           tags: tags || null,
           description: description || null,
           is_public: isPublic
@@ -149,6 +224,25 @@ export default async function handler(
         // 插入到数据库
         const imageId = await db.insertImage(imageRecord);
 
+        // 发送到 Telegram 频道（忽略失败，不影响主流程）
+        let telegramInfo: { chat_id: string; message_id: number } | undefined;
+        try {
+          // 将 Telegram 字段直接落入 img 表
+          await db.updateImageTelegramInfo(imageId, {
+            tg_message_id: tgRes.messageId ?? null,
+            tg_file_id: tgRes.file?.file_id ?? null,
+            tg_file_path: tgRes.filePath ?? null,
+            tg_endpoint: tgRes.endpoint ?? null,
+            tg_field_name: tgRes.fieldName ?? null,
+            tg_file_name: tgRes.file?.file_name ?? null,
+          });
+          if (tgRes.chatId && tgRes.messageId) {
+            telegramInfo = { chat_id: tgRes.chatId, message_id: tgRes.messageId };
+          }
+        } catch (tgErr) {
+          console.error('Telegram send/store error:', tgErr);
+        }
+
         // 添加到返回结果
         uploadedUrls.push(uploadUrl);
         uploadedImages?.push({
@@ -156,7 +250,8 @@ export default async function handler(
           url: uploadUrl,
           name: uniqueFileName,
           file_size: fileSize,
-          file_format: fileFormat
+          file_format: fileFormat,
+          telegram: telegramInfo
         });
 
         console.log(`Successfully uploaded image: ${uniqueFileName} (ID: ${imageId})`);
@@ -170,6 +265,7 @@ export default async function handler(
           fs.unlinkSync(file.filepath);
         } catch (cleanupError) {
           console.error('Failed to cleanup temp file:', cleanupError);
+        }
         }
       }
     }

@@ -10,13 +10,19 @@ CREATE TABLE IF NOT EXISTS img (
     upload_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 上传时间
     is_deleted BOOLEAN DEFAULT FALSE,      -- 是否已删除（软删除）
     deleted_at DATETIME,                   -- 删除时间
-    access_count INTEGER DEFAULT 0,        -- 访问次数
-    last_access_time DATETIME,            -- 最后访问时间
     tags TEXT,                             -- 标签（JSON字符串或逗号分隔）
     description TEXT,                      -- 图片描述
     is_public BOOLEAN DEFAULT TRUE,        -- 是否公开
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    -- Telegram 相关字段
+    tg_message_id INTEGER,                 -- Telegram 消息ID
+    tg_file_id TEXT UNIQUE,                -- Telegram 文件ID（可用于 getFile）
+    tg_file_path TEXT,                     -- Telegram 文件路径（getFile 返回）
+    tg_endpoint TEXT,                      -- 使用的发送接口（sendPhoto/sendDocument/...）
+    tg_field_name TEXT,                    -- 字段名（photo/video/audio/document）
+    tg_file_name TEXT                      -- Telegram 返回的文件名（如有）
 );
 
 -- 创建索引提高查询性能
@@ -25,6 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_img_is_public ON img(is_public);
 CREATE INDEX IF NOT EXISTS idx_img_is_deleted ON img(is_deleted);
 CREATE INDEX IF NOT EXISTS idx_img_created_at ON img(created_at);
 CREATE INDEX IF NOT EXISTS idx_img_upload_time ON img(upload_time);
+CREATE INDEX IF NOT EXISTS idx_img_tg_file_id ON img(tg_file_id);
 
 -- 创建复合索引
 CREATE INDEX IF NOT EXISTS idx_img_public_not_deleted ON img(is_public, is_deleted);

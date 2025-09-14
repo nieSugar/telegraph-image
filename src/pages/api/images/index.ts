@@ -51,7 +51,8 @@ export default async function handler(
       page = '1', 
       limit = '20', 
       search,
-      stats 
+      stats,
+      all
     } = req.query;
 
     const pageNum = parseInt(Array.isArray(page) ? page[0] : page);
@@ -71,6 +72,9 @@ export default async function handler(
     if (searchQuery) {
       // 搜索图片
       images = await db.searchImages(searchQuery, pageNum, limitNum);
+    } else if (all === 'true') {
+      // 获取所有图片（包含非公开/已删除）
+      images = await db.getAllImages(pageNum, limitNum);
     } else {
       // 获取公开图片列表
       images = await db.getPublicImages(pageNum, limitNum);
@@ -95,9 +99,10 @@ export default async function handler(
 
   } catch (error) {
     console.error('Get images error:', error);
+    const message = error instanceof Error ? error.message : String(error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to retrieve images'
+      message
     });
   }
 }

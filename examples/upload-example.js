@@ -116,6 +116,33 @@ async function deleteImage(id) {
   }
 }
 
+// 7. 批量上传 src/img 目录下的图片（Node 环境）
+async function batchUploadFromLocalDir(apiBase = 'http://localhost:3200') {
+  try {
+    const { readdirSync, readFileSync } = require('fs');
+    const path = require('path');
+    const dir = path.join(process.cwd(), 'src', 'img');
+    const files = readdirSync(dir).filter((f) => /\.(png|jpe?g|gif|webp)$/i.test(f));
+    const results = [];
+    for (const name of files) {
+      const abs = path.join(dir, name);
+      const buf = readFileSync(abs);
+      const blob = new Blob([buf], { type: name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg' });
+      const fd = new FormData();
+      fd.append('file', blob, name);
+      fd.append('description', name);
+      const resp = await fetch(`${apiBase}/api/upload/image`, { method: 'POST', body: fd });
+      const json = await resp.json();
+      console.log('上传结果:', name, json.success, json.message || '');
+      results.push({ name, success: !!json.success, data: json });
+    }
+    return results;
+  } catch (e) {
+    console.error('批量上传失败:', e);
+    return [];
+  }
+}
+
 // 使用示例
 document.addEventListener('DOMContentLoaded', function() {
   // 文件上传处理
@@ -149,6 +176,7 @@ if (typeof module !== 'undefined' && module.exports) {
     searchImages,
     getImageDetail,
     updateImage,
-    deleteImage
+    deleteImage,
+    batchUploadFromLocalDir
   };
 }
