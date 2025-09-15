@@ -10,6 +10,8 @@ const HomePage: React.FC = () => {
   const [copyVisible, setCopyVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const toAbsoluteUrl = (url: string): string => (url.startsWith('http') ? url : `${window.location.origin}${url}`);
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
@@ -38,7 +40,7 @@ const HomePage: React.FC = () => {
       });
 
       if (response.data.success && response.data.urls) {
-        setUploadedUrls(response.data.urls);
+        setUploadedUrls(response.data.urls.map((u: string) => toAbsoluteUrl(u)));
       } else {
         setError('上传失败：' + (response.data.message || '未知错误'));
       }
@@ -51,8 +53,7 @@ const HomePage: React.FC = () => {
   };
 
   const handleCopyClick = (url: string) => {
-    // 如果URL已经包含域名，直接复制；否则添加当前域名
-    const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+    const fullUrl = toAbsoluteUrl(url);
     navigator.clipboard.writeText(fullUrl);
     setCopyVisible(true);
   };
