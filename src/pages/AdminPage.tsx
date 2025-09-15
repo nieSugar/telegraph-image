@@ -55,6 +55,8 @@ const AdminPage: React.FC = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [copyVisible, setCopyVisible] = useState(false);
   const [selectedImageId, setSelectedImageId] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { logout } = useAuth();
   
   // 分页相关状态
@@ -74,21 +76,46 @@ const AdminPage: React.FC = () => {
 
   const handleDeleteClick = (id: number) => {
     setSelectedImageId(id);
+    setDeleteError(null);
     setShowConfirm(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedImageId) {
-      // 仅本地删除占位；如需真实删除可调用 /api/images/[id] 再刷新列表
-      const newImages = images.filter(img => img.id !== selectedImageId);
-      setImages(newImages);
-      setTotalItems(prev => Math.max(prev - 1, 0));
+      setDeleteLoading(true);
+      setDeleteError(null);
+
+      try {
+        // 调用删除API
+        const response = await fetch(`/api/images/${selectedImageId}`, {
+          method: 'DELETE',
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // 删除成功，重新获取图片列表
+          await fetchImages(currentPage);
+          setShowConfirm(false);
+        } else {
+          // 删除失败，显示错误信息
+          setDeleteError(data.message || '删除失败');
+        }
+      } catch (error) {
+        console.error('删除请求失败:', error);
+        setDeleteError('删除请求失败，请稍后再试');
+      } finally {
+        setDeleteLoading(false);
+      }
+    } else {
+      setShowConfirm(false);
     }
-    setShowConfirm(false);
   };
 
   const handleCopyClick = (url: string) => {
-    navigator.clipboard.writeText(url);
+    // 如果URL已经包含域名，直接复制；否则添加当前域名
+    const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+    navigator.clipboard.writeText(fullUrl);
     setCopyVisible(true);
   };
 
@@ -111,7 +138,7 @@ const AdminPage: React.FC = () => {
   async function fetchImages(page: number) {
     setLoading(true);
     try {
-      const res = await fetch(`/api/images?all=true&page=${page}&limit=${itemsPerPage}&stats=true`);
+      const res = await fetch(`/api/images?page=${page}&limit=${itemsPerPage}&stats=true`);
       const data: ImagesApiResponse = await res.json();
       if (!data.success) throw new Error(data.message || 'Failed');
       const list = (data.images || []).map((img) => ({
@@ -183,7 +210,7 @@ const AdminPage: React.FC = () => {
                   <TableCell>{image.id}</TableCell>
                   <TableCell>{image.name}</TableCell>
                   <TableCell>
-                    <Text size="small" truncate>{image.url}</Text>
+                    <img src={image.url} alt={image.name} style={{ maxWidth: '100px', maxHeight: '100px' }} />
                   </TableCell>
                   <TableCell>{image.uploadDate}</TableCell>
                   <TableCell>
@@ -218,25 +245,37 @@ const AdminPage: React.FC = () => {
       {showConfirm && (
         <Layer
           position="center"
-          onClickOutside={() => setShowConfirm(false)}
-          onEsc={() => setShowConfirm(false)}
+          onClickOutside={() => !deleteLoading && setShowConfirm(false)}
+          onEsc={() => !deleteLoading && setShowConfirm(false)}
         >
           <Box pad="medium" gap="medium" width="medium">
             <Heading level={3} margin="none">
               确认删除
             </Heading>
             <Text>确定要删除这张图片吗？此操作无法撤销。</Text>
+
+            {deleteError && (
+              <Text color="status-critical" size="small">
+                {deleteError}
+              </Text>
+            )}
+
             <Box
               direction="row"
               gap="medium"
               justify="end"
             >
-              <Button label="取消" onClick={() => setShowConfirm(false)} />
               <Button
-                label="删除"
+                label="取消"
+                onClick={() => setShowConfirm(false)}
+                disabled={deleteLoading}
+              />
+              <Button
+                label={deleteLoading ? "删除中..." : "删除"}
                 primary
                 color="status-critical"
                 onClick={confirmDelete}
+                disabled={deleteLoading}
               />
             </Box>
           </Box>

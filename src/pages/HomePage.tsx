@@ -51,7 +51,9 @@ const HomePage: React.FC = () => {
   };
 
   const handleCopyClick = (url: string) => {
-    navigator.clipboard.writeText(url);
+    // 如果URL已经包含域名，直接复制；否则添加当前域名
+    const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+    navigator.clipboard.writeText(fullUrl);
     setCopyVisible(true);
   };
 

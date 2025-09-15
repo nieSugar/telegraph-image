@@ -106,7 +106,7 @@ export class D1ImageDB {
     return result.results || [];
   }
 
-  // 获取所有图片（分页，不过滤公开/删除）
+  // 获取所有图片（分页，过滤已删除的图片）
   async getAllImages(page: number = 1, limit: number = 20): Promise<ImageRecord[]> {
     const offset = (page - 1) * limit;
     const stmt = this.db.prepare(`
@@ -207,7 +207,12 @@ export class D1ImageDB {
     deleted: number;
     totalSize: number;
   }> {
-    const totalStmt = this.db.prepare('SELECT COUNT(*) as count FROM img');
+    const totalStmt = this.db.prepare(`
+      SELECT COUNT(*) as count FROM img
+      WHERE (
+        is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
+      )
+    `);
     const publicStmt = this.db.prepare(`
       SELECT COUNT(*) as count FROM img 
       WHERE (

@@ -49,9 +49,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(404).json({ success: false, message: 'File not found' });
   }
 
-  const directUrl = buildTelegramFileUrl(filePath);
-  res.setHeader('Location', directUrl);
-  res.status(302).end();
+  try {
+    // 获取文件内容
+    const directUrl = buildTelegramFileUrl(filePath);
+    const fileResponse = await fetch(directUrl);
+
+    if (!fileResponse.ok) {
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+
+    const fileBuffer = await fileResponse.arrayBuffer();
+    const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
+
+    // 检查请求头，决定返回格式
+    const acceptHeader = req.headers.accept || '';
+    const wantsJson = acceptHeader.includes('application/json') || req.query.format === 'json';
+
+    if (wantsJson) {
+      // 返回JSON格式的base64数据
+      const base64Data = Buffer.from(fileBuffer).toString('base64');
+      return res.status(200).json({
+        success: true,
+        data: base64Data,
+        contentType: contentType,
+        size: fileBuffer.byteLength
+      });
+    } else {
+      // 直接返回文件内容（保持向后兼容性）
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Length', fileBuffer.byteLength.toString());
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 缓存1年
+      return res.status(200).send(Buffer.from(fileBuffer));
+    }
+  } catch (error) {
+    console.error('Error fetching file:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch file' });
+  }
 }
 
 
