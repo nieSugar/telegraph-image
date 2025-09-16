@@ -13,26 +13,26 @@ interface D1Database {
 export interface ImageRecord {
   id?: number;
   name: string;
-  original_name: string;
+  originalName: string;
   url: string;
-  file_path: string;
-  file_format: string;
-  file_size: number;
-  upload_time?: string;
-  is_deleted?: boolean;
-  deleted_at?: string | null;
+  filePath: string;
+  fileFormat: string;
+  fileSize: number;
+  uploadTime?: string;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
   tags?: string | null;
   description?: string | null;
-  is_public?: boolean;
-  created_at?: string;
-  updated_at?: string;
+  isPublic?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   // Telegram fields in img table
-  tg_message_id?: number | null;
-  tg_file_id?: string | null;
-  tg_file_path?: string | null;
-  tg_endpoint?: string | null;
-  tg_field_name?: string | null;
-  tg_file_name?: string | null;
+  tgMessageId?: number | null;
+  tgFileId?: string | null;
+  tgFilePath?: string | null;
+  tgEndpoint?: string | null;
+  tgFieldName?: string | null;
+  tgFileName?: string | null;
 }
 
 export class D1ImageDB {
@@ -43,25 +43,25 @@ export class D1ImageDB {
   }
 
   // 插入新图片记录
-  async insertImage(imageData: Omit<ImageRecord, 'id' | 'upload_time' | 'created_at' | 'updated_at'>): Promise<number> {
+  async insertImage(imageData: Omit<ImageRecord, 'id' | 'uploadTime' | 'createdAt' | 'updatedAt'>): Promise<number> {
     const stmt = this.db.prepare(`
       INSERT INTO img (
-        name, original_name, url, file_path, file_format, file_size,
-        is_deleted, tags, description, is_public
+        name, originalName, url, filePath, fileFormat, fileSize,
+        isDeleted, tags, description, isPublic
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    
+
     const result = await stmt.bind(
       imageData.name,
-      imageData.original_name,
+      imageData.originalName,
       imageData.url,
-      imageData.file_path,
-      imageData.file_format,
-      imageData.file_size,
-      imageData.is_deleted || false,
+      imageData.filePath,
+      imageData.fileFormat,
+      imageData.fileSize,
+      imageData.isDeleted ? 1 : 0,
       imageData.tags || null,
       imageData.description || null,
-      imageData.is_public !== undefined ? imageData.is_public : true
+      imageData.isPublic !== undefined ? (imageData.isPublic ? 1 : 0) : 1
     ).run();
 
     if (!result.success) {
@@ -73,36 +73,29 @@ export class D1ImageDB {
 
   // 根据ID获取图片
   async getImageById(id: number): Promise<ImageRecord | null> {
-    const stmt = this.db.prepare(`SELECT * FROM img WHERE id = ? AND (
-      is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
-    )`);
-    const result = await stmt.bind(id).first<ImageRecord>();
-    return result || null;
+    const stmt = this.db.prepare(`SELECT * FROM img WHERE id = ? AND (isDeleted IS NULL OR isDeleted = 0)`);
+    const result = await stmt.bind(id).first();
+    return result||[];
   }
 
   // 根据URL获取图片
   async getImageByUrl(url: string): Promise<ImageRecord | null> {
-    const stmt = this.db.prepare(`SELECT * FROM img WHERE url = ? AND (
-      is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
-    )`);
-    const result = await stmt.bind(url).first<ImageRecord>();
-    return result || null;
+    const stmt = this.db.prepare(`SELECT * FROM img WHERE url = ? AND (isDeleted IS NULL OR isDeleted = 0)`);
+    const result = await stmt.bind(url).first();
+    return result||[];
   }
 
   // 获取所有公开图片（分页）
   async getPublicImages(page: number = 1, limit: number = 20): Promise<ImageRecord[]> {
     const offset = (page - 1) * limit;
     const stmt = this.db.prepare(`
-      SELECT * FROM img 
-      WHERE (
-        is_public = 1 OR is_public = '1' OR LOWER(CAST(is_public AS TEXT)) = 'true'
-      ) AND (
-        is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
-      )
-      ORDER BY created_at DESC 
+      SELECT * FROM img
+      WHERE (isPublic IS NULL OR isPublic = 1)
+        AND (isDeleted IS NULL OR isDeleted = 0)
+      ORDER BY createdAt DESC
       LIMIT ? OFFSET ?
     `);
-    const result = await stmt.bind(limit, offset).all<ImageRecord>();
+    const result = await stmt.bind(limit, offset).all();
     return result.results || [];
   }
 
@@ -110,37 +103,44 @@ export class D1ImageDB {
   async getAllImages(page: number = 1, limit: number = 20): Promise<ImageRecord[]> {
     const offset = (page - 1) * limit;
     const stmt = this.db.prepare(`
-      SELECT * FROM img 
-      ORDER BY created_at DESC 
+      SELECT * FROM img
+      WHERE (isDeleted IS NULL OR isDeleted = 0)
+      ORDER BY createdAt DESC
       LIMIT ? OFFSET ?
     `);
-    const result = await stmt.bind(limit, offset).all<ImageRecord>();
+    const result = await stmt.bind(limit, offset).all();
     return result.results || [];
-  }
-
-  // 删除访问计数相关逻辑（按需保留空位以兼容调用方）
-  async updateAccessCount(_id: number): Promise<void> {
-    return;
   }
 
   // 软删除图片
   async deleteImage(id: number): Promise<void> {
+    // 首先检查图片是否存在
+    const existingImage = await this.getImageById(id);
+    if (!existingImage) {
+      throw new Error(`Image with id ${id} not found`);
+    }
+
     const stmt = this.db.prepare(`
-      UPDATE img 
-      SET is_deleted = TRUE, 
-          deleted_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
+      UPDATE img
+      SET isDeleted = 1,
+          deletedAt = datetime('now'),
+          updatedAt = datetime('now')
       WHERE id = ?
     `);
-    
+
     const result = await stmt.bind(id).run();
     if (!result.success) {
-      throw new Error(`Failed to delete image: ${result.error}`);
+      throw new Error(`Failed to delete image with id ${id}: ${result.error || 'Unknown error'}`);
+    }
+
+    // 验证删除是否成功（可选验证）
+    if (result.meta && 'changes' in result.meta && (result.meta as any).changes === 0) {
+      throw new Error(`No rows were updated when deleting image with id ${id}`);
     }
   }
 
   // 更新图片信息
-  async updateImage(id: number, updates: Partial<Pick<ImageRecord, 'name' | 'tags' | 'description' | 'is_public'>>): Promise<void> {
+  async updateImage(id: number, updates: Partial<Pick<ImageRecord, 'name' | 'tags' | 'description' | 'isPublic'>>): Promise<void> {
     const fields: string[] = [];
     const values: any[] = [];
 
@@ -156,22 +156,22 @@ export class D1ImageDB {
       fields.push('description = ?');
       values.push(updates.description);
     }
-    if (updates.is_public !== undefined) {
-      fields.push('is_public = ?');
-      values.push(updates.is_public);
+    if (updates.isPublic !== undefined) {
+      fields.push('isPublic = ?');
+      values.push(updates.isPublic ? 1 : 0);
     }
 
     if (fields.length === 0) return;
 
-    fields.push('updated_at = CURRENT_TIMESTAMP');
+    fields.push('updatedAt = datetime(\'now\')');
     values.push(id);
 
     const stmt = this.db.prepare(`
-      UPDATE img 
+      UPDATE img
       SET ${fields.join(', ')}
       WHERE id = ?
     `);
-    
+
     const result = await stmt.bind(...values).run();
     if (!result.success) {
       throw new Error(`Failed to update image: ${result.error}`);
@@ -179,24 +179,24 @@ export class D1ImageDB {
   }
 
   // 搜索图片（根据名称、标签、描述）
-  async searchImages(query: string, page: number = 1, limit: number = 20): Promise<ImageRecord[]> {
+  async searchImages(query: string, page: number = 1, limit: number = 20, publicOnly: boolean = true): Promise<ImageRecord[]> {
     const offset = (page - 1) * limit;
     const searchPattern = `%${query}%`;
-    
+
+    const publicCondition = publicOnly
+      ? `AND (isPublic IS NULL OR isPublic = 1)`
+      : '';
+
     const stmt = this.db.prepare(`
-      SELECT * FROM img 
-      WHERE (name LIKE ? OR tags LIKE ? OR description LIKE ?) 
-        AND (
-          is_public = 1 OR is_public = '1' OR LOWER(CAST(is_public AS TEXT)) = 'true'
-        )
-        AND (
-          is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
-        )
-      ORDER BY created_at DESC 
+      SELECT * FROM img
+      WHERE (name LIKE ? OR tags LIKE ? OR description LIKE ?)
+        ${publicCondition}
+        AND (isDeleted IS NULL OR isDeleted = 0)
+      ORDER BY createdAt DESC
       LIMIT ? OFFSET ?
     `);
-    
-    const result = await stmt.bind(searchPattern, searchPattern, searchPattern, limit, offset).all<ImageRecord>();
+
+    const result = await stmt.bind(searchPattern, searchPattern, searchPattern, limit, offset).all();
     return result.results || [];
   }
 
@@ -209,62 +209,55 @@ export class D1ImageDB {
   }> {
     const totalStmt = this.db.prepare(`
       SELECT COUNT(*) as count FROM img
-      WHERE (
-        is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
-      )
+      WHERE (isDeleted IS NULL OR isDeleted = 0)
     `);
     const publicStmt = this.db.prepare(`
-      SELECT COUNT(*) as count FROM img 
-      WHERE (
-        is_public = 1 OR is_public = '1' OR LOWER(CAST(is_public AS TEXT)) = 'true'
-      ) AND (
-        is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
-      )
+      SELECT COUNT(*) as count FROM img
+      WHERE (isPublic IS NULL OR isPublic = 1)
+        AND (isDeleted IS NULL OR isDeleted = 0)
     `);
     const deletedStmt = this.db.prepare(`
-      SELECT COUNT(*) as count FROM img 
-      WHERE (is_deleted = 1 OR is_deleted = '1' OR LOWER(CAST(is_deleted AS TEXT)) = 'true')
+      SELECT COUNT(*) as count FROM img
+      WHERE isDeleted = 1
     `);
     const sizeStmt = this.db.prepare(`
-      SELECT SUM(file_size) as total_size FROM img 
-      WHERE (
-        is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
-      )
+      SELECT SUM(fileSize) as totalSize FROM img
+      WHERE (isDeleted IS NULL OR isDeleted = 0)
     `);
 
     const [totalResult, publicResult, deletedResult, sizeResult] = await Promise.all([
       totalStmt.bind().first<{ count: number }>(),
       publicStmt.bind().first<{ count: number }>(),
       deletedStmt.bind().first<{ count: number }>(),
-      sizeStmt.bind().first<{ total_size: number }>()
+      sizeStmt.bind().first<{ totalSize: number }>()
     ]);
 
     return {
       total: totalResult?.count || 0,
       public: publicResult?.count || 0,
       deleted: deletedResult?.count || 0,
-      totalSize: sizeResult?.total_size || 0
+      totalSize: sizeResult?.totalSize || 0
     };
   }
 
   // 直接在 img 表上更新 Telegram 字段
   async updateImageTelegramInfo(
     id: number,
-    info: Partial<Pick<ImageRecord, 'tg_message_id' | 'tg_file_id' | 'tg_file_path' | 'tg_endpoint' | 'tg_field_name' | 'tg_file_name'>>
+    info: Partial<Pick<ImageRecord, 'tgMessageId' | 'tgFileId' | 'tgFilePath' | 'tgEndpoint' | 'tgFieldName' | 'tgFileName'>>
   ): Promise<void> {
     const fields: string[] = [];
     const values: any[] = [];
 
-    if (info.tg_message_id !== undefined) { fields.push('tg_message_id = ?'); values.push(info.tg_message_id); }
-    if (info.tg_file_id !== undefined) { fields.push('tg_file_id = ?'); values.push(info.tg_file_id); }
-    if (info.tg_file_path !== undefined) { fields.push('tg_file_path = ?'); values.push(info.tg_file_path); }
-    if (info.tg_endpoint !== undefined) { fields.push('tg_endpoint = ?'); values.push(info.tg_endpoint); }
-    if (info.tg_field_name !== undefined) { fields.push('tg_field_name = ?'); values.push(info.tg_field_name); }
-    if (info.tg_file_name !== undefined) { fields.push('tg_file_name = ?'); values.push(info.tg_file_name); }
+    if (info.tgMessageId !== undefined) { fields.push('tgMessageId = ?'); values.push(info.tgMessageId); }
+    if (info.tgFileId !== undefined) { fields.push('tgFileId = ?'); values.push(info.tgFileId); }
+    if (info.tgFilePath !== undefined) { fields.push('tgFilePath = ?'); values.push(info.tgFilePath); }
+    if (info.tgEndpoint !== undefined) { fields.push('tgEndpoint = ?'); values.push(info.tgEndpoint); }
+    if (info.tgFieldName !== undefined) { fields.push('tgFieldName = ?'); values.push(info.tgFieldName); }
+    if (info.tgFileName !== undefined) { fields.push('tgFileName = ?'); values.push(info.tgFileName); }
 
     if (fields.length === 0) return;
 
-    fields.push('updated_at = CURRENT_TIMESTAMP');
+    fields.push('updatedAt = datetime(\'now\')');
     values.push(id);
 
     const stmt = this.db.prepare(`
@@ -278,13 +271,11 @@ export class D1ImageDB {
     }
   }
 
-  // 通过 tg_file_id 获取图片
+  // 通过 tgFileId 获取图片
   async getImageByTelegramFileId(fileId: string): Promise<ImageRecord | null> {
-    const stmt = this.db.prepare(`SELECT * FROM img WHERE tg_file_id = ? AND (
-      is_deleted = 0 OR is_deleted = '0' OR LOWER(CAST(is_deleted AS TEXT)) = 'false' OR is_deleted IS NULL
-    )`);
-    const result = await stmt.bind(fileId).first<ImageRecord>();
-    return result || null;
+    const stmt = this.db.prepare(`SELECT * FROM img WHERE tgFileId = ? AND (isDeleted IS NULL OR isDeleted = 0)`);
+    const result = await stmt.bind(fileId).first();
+    return result||[];
   }
 }
 
@@ -309,13 +300,11 @@ import Cloudflare from 'cloudflare';
 
 export class CloudflareD1Client {
   private accountId: string;
-  private apiToken: string;
   private databaseId: string;
   private cf: Cloudflare;
 
   constructor(accountId: string, apiToken: string, databaseId: string) {
     this.accountId = accountId;
-    this.apiToken = apiToken;
     this.databaseId = databaseId;
     this.cf = new Cloudflare({ apiToken });
   }

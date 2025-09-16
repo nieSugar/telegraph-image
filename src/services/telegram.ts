@@ -96,12 +96,12 @@ export type TelegramUploadResult = {
 
 // 需要在 img 表上持久化的 Telegram 字段（不包含 chat_id）
 export type PersistableTelegramInfo = {
-  tg_message_id: number | null;
-  tg_file_id: string | null;
-  tg_file_path: string | null;
-  tg_endpoint: EndpointResolution['endpoint'] | null;
-  tg_field_name: TelegramFileKind | null;
-  tg_file_name: string | null;
+  tgMessageId: number | null;
+  tgFileId: string | null;
+  tgFilePath: string | null;
+  tgEndpoint: EndpointResolution['endpoint'] | null;
+  tgFieldName: TelegramFileKind | null;
+  tgFileName: string | null;
 };
 
 // 参考边缘函数的直传实现：使用 FormData + fetch 将文件直传至 Telegram Bot API
@@ -140,19 +140,19 @@ export async function uploadFileToTelegram(
 
   return {
     ok: Boolean(data?.ok),
-    chatId: data?.result?.chat?.id ? String(data.result.chat.id) : undefined,
+    chatId: data?.result?.chat?.id ? String(data.result.chat.id) : '',
     messageId: data?.result?.message_id,
     endpoint,
     fieldName,
     file: fileInfo,
     filePath,
     persistable: {
-      tg_message_id: typeof data?.result?.message_id === 'number' ? data.result.message_id : null,
-      tg_file_id: fileInfo?.file_id || null,
-      tg_file_path: filePath || null,
-      tg_endpoint: endpoint || null,
-      tg_field_name: fieldName || null,
-      tg_file_name: fileInfo?.file_name || null,
+      tgMessageId: typeof data?.result?.message_id === 'number' ? data.result.message_id : null,
+      tgFileId: fileInfo?.file_id || null,
+      tgFilePath: filePath || null,
+      tgEndpoint: endpoint || null,
+      tgFieldName: fieldName || null,
+      tgFileName: fileInfo?.file_name || null,
     },
     raw: data,
   };

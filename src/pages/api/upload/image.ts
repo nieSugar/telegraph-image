@@ -19,8 +19,8 @@ type UploadResponseData = {
     id: number;
     url: string;
     name: string;
-    file_size: number;
-    file_format: string;
+    fileSize: number;
+    fileFormat: string;
     telegram?: {
       chat_id: string;
       message_id: number;
@@ -43,71 +43,130 @@ function generateUniqueFileName(originalName: string): string {
   return `${timestamp}_${random}_${baseName}${ext}`;
 }
 
-// 上传到Telegraph的函数（模拟，你可以替换为实际的上传逻辑）
-async function uploadToTelegraph(fileData: Buffer, fileName: string): Promise<string> {
-  // 这里是示例，实际需要调用Telegraph API
-  // 返回上传后的URL
-  const baseUrl = process.env.TELEGRAPH_BASE_URL || 'https://telegra.ph/file/';
-  const fileId = Math.random().toString(36).substring(2, 15);
-  return `${baseUrl}${fileId}.${path.extname(fileName).substring(1)}`;
+// 构造文件访问URL的函数
+function buildFileUrl(req: NextApiRequest, fileId: string): string {
+  const protocol = req.headers['x-forwarded-proto'] || 'http';
+  const host = req.headers.host;
+  return `${protocol}://${host}/api/cfile/${fileId}`;
 }
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<UploadResponseData>
 ) {
+  // 只允许 POST 请求
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, message: 'Method not allowed' });
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).json({
+      success: false,
+      message: 'Method not allowed'
+    });
+  }
+
+  // 检查 Content-Type
+  const contentType = req.headers['content-type'];
+  if (!contentType || !contentType.includes('multipart/form-data')) {
+    return res.status(400).json({
+      success: false,
+      message: 'Content-Type must be multipart/form-data'
+    });
   }
 
   let db: D1ImageDB;
-  
+
   try {
     // 初始化数据库连接
     db = await getDB();
   } catch (error) {
     console.error('Database connection error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Database connection failed' 
+    return res.status(500).json({
+      success: false,
+      message: '数据库连接失败，请稍后重试'
     });
   }
 
   try {
     // 创建上传目录
     const uploadDir = path.join(process.cwd(), 'tmp');
-    
+
     // 确保上传目录存在
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    try {
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+    } catch (error) {
+      console.error('Failed to create upload directory:', error);
+      return res.status(500).json({
+        success: false,
+        message: '服务器配置错误，无法创建上传目录'
+      });
     }
-    
+
     // 使用formidable解析上传的文件，并配置选项
     const form = formidable({
       uploadDir,
       keepExtensions: true,
       maxFileSize: 10 * 1024 * 1024, // 限制10MB
+      maxFiles: 1, // 限制单次只能上传一个文件
+      allowEmptyFiles: false,
       filter: (part) => {
         // 只允许图片文件
         if (!part.mimetype?.includes('image/')) {
+          console.log('Rejected file due to invalid MIME type:', part.mimetype);
           return false;
         }
-        
+
         // 验证文件扩展名
         const originalFilename = part.originalFilename || '';
-        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-        const hasAllowedExtension = allowedExtensions.some(ext => 
+        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+        const hasAllowedExtension = allowedExtensions.some(ext =>
           originalFilename.toLowerCase().endsWith(ext)
         );
-        
+
+        if (!hasAllowedExtension) {
+          console.log('Rejected file due to invalid extension:', originalFilename);
+        }
+
         return hasAllowedExtension;
       },
     });
 
     // 解析表单数据
-    const [fields, files] = await form.parse(req);
-    
+    let fields: any, files: any;
+    try {
+      [fields, files] = await form.parse(req);
+    } catch (error: any) {
+      console.error('Form parsing error:', error);
+
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+          success: false,
+          message: '文件大小超过限制（最大10MB）'
+        });
+      }
+
+      if (error.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({
+          success: false,
+          message: '一次只能上传一个文件'
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: '文件解析失败，请检查文件格式'
+      });
+    }
+
     const fileArray = files.file || [];
+
+    if (fileArray.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '请选择要上传的图片文件'
+      });
+    }
+
     const uploadedUrls: string[] = [];
     const uploadedImages: UploadResponseData['images'] = [];
 
@@ -131,20 +190,26 @@ export default async function handler(
 
       // 直传 Telegram，获取 message 信息
       const tgRes = await uploadFileToTelegram(buffer, mime, uniqueFileName, caption || undefined);
-      // 构造可引用 URL（如果你有自己的文件访问路由，可替换）
-      const uploadUrl = tgRes.file?.file_id ? `/api/cfile/${tgRes.file.file_id}` : await uploadToTelegraph(buffer, uniqueFileName);
 
-      const imageRecord: Omit<ImageRecord, 'id' | 'upload_time' | 'created_at' | 'updated_at'> = {
+      // 检查 Telegram 上传是否成功
+      if (!tgRes.ok || !tgRes.file?.file_id) {
+        throw new Error('Failed to upload to Telegram');
+      }
+
+      // 构造可引用 URL
+      const uploadUrl = buildFileUrl(req, tgRes.file.file_id);
+
+      const imageRecord: Omit<ImageRecord, 'id' | 'uploadTime' | 'createdAt' | 'updatedAt'> = {
         name: uniqueFileName,
-        original_name: originalFilename,
+        originalName: originalFilename,
         url: uploadUrl,
-        file_path: `/uploads/${uniqueFileName}`,
-        file_format: fileFormat,
-        file_size: fileSize,
-        is_deleted: false,
+        filePath: `/uploads/${uniqueFileName}`,
+        fileFormat: fileFormat,
+        fileSize: fileSize,
+        isDeleted: false,
         tags: tags || null,
         description: descriptionField || null,
-        is_public: isPublic
+        isPublic: isPublic
       };
 
       const imageId = await db.insertImage(imageRecord);
@@ -153,12 +218,12 @@ export default async function handler(
       try {
         // 将 Telegram 字段直接落入 img 表
         await db.updateImageTelegramInfo(imageId, {
-          tg_message_id: tgRes.messageId ?? null,
-          tg_file_id: tgRes.file?.file_id ?? null,
-          tg_file_path: tgRes.filePath ?? null,
-          tg_endpoint: tgRes.endpoint ?? null,
-          tg_field_name: tgRes.fieldName ?? null,
-          tg_file_name: tgRes.file?.file_name ?? null,
+          tgMessageId: tgRes.messageId ?? null,
+          tgFileId: tgRes.file?.file_id ?? null,
+          tgFilePath: tgRes.filePath ?? null,
+          tgEndpoint: tgRes.endpoint ?? null,
+          tgFieldName: tgRes.fieldName ?? null,
+          tgFileName: tgRes.file?.file_name ?? null,
         });
         if (tgRes.chatId && tgRes.messageId) {
           telegramInfo = { chat_id: tgRes.chatId, message_id: tgRes.messageId };
@@ -172,14 +237,25 @@ export default async function handler(
         id: imageId,
         url: uploadUrl,
         name: uniqueFileName,
-        file_size: fileSize,
-        file_format: fileFormat,
-        telegram: telegramInfo
+        fileSize: fileSize,
+        fileFormat: fileFormat,
+        telegram: telegramInfo || undefined
       });
     } else {
       // 处理每个上传的文件
+      console.log('Processing file uploads, fileArray:', fileArray);
       for (const file of fileArray) {
-        if (!file) continue;
+        if (!file) {
+          console.log('Skipping null/undefined file');
+          continue;
+        }
+
+        console.log('Processing file:', {
+          originalFilename: file.originalFilename,
+          mimetype: file.mimetype,
+          size: file.size,
+          filepath: file.filepath
+        });
 
       try {
         // 读取文件
@@ -197,8 +273,14 @@ export default async function handler(
         const descriptionField = Array.isArray(fields.description) ? fields.description[0] : fields.description || null;
         const caption = descriptionField || uniqueFileName;
         const tgRes = await uploadFileToTelegram(fileData, mime, uniqueFileName, caption || undefined);
-        // 构造可引用 URL（如果你有自己的文件访问路由，可替换）
-        const uploadUrl = tgRes.file?.file_id ? `/api/cfile/${tgRes.file.file_id}` : await uploadToTelegraph(fileData, uniqueFileName);
+
+        // 检查 Telegram 上传是否成功
+        if (!tgRes.ok || !tgRes.file?.file_id) {
+          throw new Error('Failed to upload to Telegram');
+        }
+
+        // 构造可引用 URL
+        const uploadUrl = buildFileUrl(req, tgRes.file.file_id);
         
         // 从表单字段获取额外信息
         const tags = Array.isArray(fields.tags) ? fields.tags[0] : fields.tags || null;
@@ -208,17 +290,17 @@ export default async function handler(
           : fields.isPublic !== 'false';
 
         // 准备数据库记录
-        const imageRecord: Omit<ImageRecord, 'id' | 'upload_time' | 'created_at' | 'updated_at'> = {
+        const imageRecord: Omit<ImageRecord, 'id' | 'uploadTime' | 'createdAt' | 'updatedAt'> = {
           name: uniqueFileName,
-          original_name: originalFilename,
+          originalName: originalFilename,
           url: uploadUrl,
-          file_path: `/uploads/${uniqueFileName}`, // 本地路径，可选
-          file_format: fileFormat,
-          file_size: fileSize,
-          is_deleted: false,
+          filePath: `/uploads/${uniqueFileName}`, // 本地路径，可选
+          fileFormat: fileFormat,
+          fileSize: fileSize,
+          isDeleted: false,
           tags: tags || null,
           description: description || null,
-          is_public: isPublic
+          isPublic: isPublic
         };
 
         // 插入到数据库
@@ -229,12 +311,12 @@ export default async function handler(
         try {
           // 将 Telegram 字段直接落入 img 表
           await db.updateImageTelegramInfo(imageId, {
-            tg_message_id: tgRes.messageId ?? null,
-            tg_file_id: tgRes.file?.file_id ?? null,
-            tg_file_path: tgRes.filePath ?? null,
-            tg_endpoint: tgRes.endpoint ?? null,
-            tg_field_name: tgRes.fieldName ?? null,
-            tg_file_name: tgRes.file?.file_name ?? null,
+            tgMessageId: tgRes.messageId ?? null,
+            tgFileId: tgRes.file?.file_id ?? null,
+            tgFilePath: tgRes.filePath ?? null,
+            tgEndpoint: tgRes.endpoint ?? null,
+            tgFieldName: tgRes.fieldName ?? null,
+            tgFileName: tgRes.file?.file_name ?? null,
           });
           if (tgRes.chatId && tgRes.messageId) {
             telegramInfo = { chat_id: tgRes.chatId, message_id: tgRes.messageId };
@@ -249,9 +331,9 @@ export default async function handler(
           id: imageId,
           url: uploadUrl,
           name: uniqueFileName,
-          file_size: fileSize,
-          file_format: fileFormat,
-          telegram: telegramInfo
+          fileSize: fileSize,
+          fileFormat: fileFormat,
+          telegram: telegramInfo || undefined
         });
 
         console.log(`Successfully uploaded image: ${uniqueFileName} (ID: ${imageId})`);
@@ -271,23 +353,50 @@ export default async function handler(
     }
 
     if (uploadedUrls.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No files were successfully uploaded' 
+      return res.status(400).json({
+        success: false,
+        message: '没有文件上传成功，请检查文件格式和大小'
       });
     }
 
     // 返回上传成功的结果
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       urls: uploadedUrls,
       images: uploadedImages,
-      message: `Successfully uploaded ${uploadedUrls.length} image(s)`
+      message: `成功上传 ${uploadedUrls.length} 张图片`
     });
 
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : '上传失败，服务器错误';
     console.error('Upload error:', error);
-    return res.status(500).json({ success: false, message: errorMessage });
+
+    // 根据错误类型返回不同的错误信息
+    if (error instanceof Error) {
+      if (error.message.includes('Telegram')) {
+        return res.status(502).json({
+          success: false,
+          message: '图片上传到存储服务失败，请稍后重试'
+        });
+      }
+
+      if (error.message.includes('Database') || error.message.includes('database')) {
+        return res.status(500).json({
+          success: false,
+          message: '数据库操作失败，请稍后重试'
+        });
+      }
+
+      if (error.message.includes('ENOENT') || error.message.includes('file')) {
+        return res.status(500).json({
+          success: false,
+          message: '文件处理失败，请重新上传'
+        });
+      }
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: '上传失败，服务器内部错误'
+    });
   }
 }

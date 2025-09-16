@@ -73,13 +73,13 @@ export default async function handler(
 
     case 'PUT':
       try {
-        const { name, tags, description, is_public } = req.body;
-        
+        const { name, tags, description, isPublic } = req.body;
+
         const updates: Parameters<typeof db.updateImage>[1] = {};
         if (name !== undefined) updates.name = name;
         if (tags !== undefined) updates.tags = tags;
         if (description !== undefined) updates.description = description;
-        if (is_public !== undefined) updates.is_public = is_public;
+        if (isPublic !== undefined) updates.isPublic = isPublic;
 
         await db.updateImage(imageId, updates);
 

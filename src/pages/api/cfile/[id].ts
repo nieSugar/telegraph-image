@@ -14,15 +14,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const fileId = String(id);
 
-  // 优先从数据库获取 tg_file_path（若已缓存），失败则调用 Telegram API 获取
+  // 优先从数据库获取 tgFilePath（若已缓存），失败则调用 Telegram API 获取
   let filePath: string | null = null;
   let imageIdToUpdate: number | null = null;
+  let imageRecord: any = null; // 存储完整的图片记录，用于获取原始文件名
 
   try {
     const db = await createD1Connection();
     const rec = await db.getImageByTelegramFileId(fileId);
-    if (rec?.tg_file_path) {
-      filePath = rec.tg_file_path;
+    imageRecord = rec; // 保存完整记录
+    if (rec?.tgFilePath) {
+      filePath = rec.tgFilePath;
     } else {
       const fetched = await getTelegramFilePath(fileId);
       filePath = fetched;
@@ -31,11 +33,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // 异步落地 tg_file_path（最佳努力，不影响响应）
+    // 异步落地 tgFilePath（最佳努力，不影响响应）
     if (imageIdToUpdate && filePath) {
       db.updateImageTelegramInfo(imageIdToUpdate, {
-        tg_file_id: fileId,
-        tg_file_path: filePath,
+        tgFileId: fileId,
+        tgFilePath: filePath,
       }).catch(() => void 0);
     }
   } catch (_) {
@@ -66,19 +68,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const wantsJson = acceptHeader.includes('application/json') || req.query.format === 'json';
 
     if (wantsJson) {
-      // 返回JSON格式的base64数据
+      // 返回JSON格式的base64数据，包含原始文件名
       const base64Data = Buffer.from(fileBuffer).toString('base64');
-      return res.status(200).json({
+      const response: any = {
         success: true,
         data: base64Data,
         contentType: contentType,
         size: fileBuffer.byteLength
-      });
+      };
+
+      // 如果有图片记录，添加文件名信息
+      if (imageRecord) {
+        response.originalName = imageRecord.originalName;
+        response.name = imageRecord.name;
+        if (imageRecord.tgFileName) {
+          response.tgFileName = imageRecord.tgFileName;
+        }
+      }
+
+      return res.status(200).json(response);
     } else {
       // 直接返回文件内容（保持向后兼容性）
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Length', fileBuffer.byteLength.toString());
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // 缓存1年
+
+      // 如果有原始文件名，设置 Content-Disposition 头
+      if (imageRecord?.originalName) {
+        const encodedFilename = encodeURIComponent(imageRecord.originalName);
+        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedFilename}`);
+      }
+
       return res.status(200).send(Buffer.from(fileBuffer));
     }
   } catch (error) {

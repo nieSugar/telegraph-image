@@ -40,7 +40,7 @@ export async function execute(sql: string, params: unknown[] = []): Promise<{
   return {
     success: result.success,
     lastInsertId: result.meta?.last_row_id || 0,
-    error: result.error,
+    error: result.error || undefined,
   };
 }
 
