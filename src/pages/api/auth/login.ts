@@ -5,6 +5,10 @@ type LoginResponseData = {
   message?: string;
 };
 
+// 默认认证配置
+const DEFAULT_USERNAME = 'admin';
+const DEFAULT_PASSWORD = 'password';
+
 export default function handler(
   req: NextApiRequest,
   res: NextApiResponse<LoginResponseData>
@@ -16,7 +20,16 @@ export default function handler(
   // 获取请求中的用户名和密码
   const { username, password } = req.body;
 
-  if (username === process.env.USER_NAME && password === process.env.PASSWORD) {
+  // 验证输入
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: '用户名和密码不能为空' });
+  }
+
+  // 从环境变量获取认证信息，如果不存在则使用默认值
+  const validUsername = process.env.USER_NAME || DEFAULT_USERNAME;
+  const validPassword = process.env.PASSWORD || DEFAULT_PASSWORD;
+
+  if (username === validUsername && password === validPassword) {
     // 登录成功
     return res.status(200).json({ success: true });
   }
