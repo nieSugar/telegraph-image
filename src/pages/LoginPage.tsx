@@ -82,7 +82,7 @@ const LoginPage: React.FC = () => {
           justify="center"
           pad={size === 'small' ? 'medium' : 'large'}
           background={{
-            image: "url(https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80)",
+            image: "url(https://rand-img.kidwen.top?rand=true)",
             size: "cover",
             position: "center"
           }}

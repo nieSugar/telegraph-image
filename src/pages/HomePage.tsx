@@ -9,7 +9,8 @@ import {
   Notification,
   ResponsiveContext,
   Spinner,
-  Text
+  Text,
+  Image,
 } from 'grommet';
 import { CloudUpload, Copy, StatusGood, Upload, View } from 'grommet-icons';
 import React, { useCallback, useRef, useState } from 'react';
@@ -33,6 +34,19 @@ const HomePage: React.FC = () => {
 
   const toAbsoluteUrl = useCallback((url: string): string =>
     url.startsWith('http') ? url : `${window.location.origin}${url}`, []);
+
+  const resetUpload = useCallback(() => {
+    setFile(null);
+    setUploadedUrls([]);
+    setError(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [previewUrl]);
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -58,8 +72,10 @@ const HomePage: React.FC = () => {
       // 创建预览URL
       const url = URL.createObjectURL(selectedFile);
       setPreviewUrl(url);
+    } else {
+      resetUpload();
     }
-  }, []);
+  }, [resetUpload]);
 
   const handleDrop = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -161,19 +177,6 @@ const HomePage: React.FC = () => {
     }
   }, [toAbsoluteUrl]);
 
-  const resetUpload = useCallback(() => {
-    setFile(null);
-    setUploadedUrls([]);
-    setError(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  }, [previewUrl]);
-
   return (
     <ResponsiveContext.Consumer>
       {size => (
@@ -183,7 +186,7 @@ const HomePage: React.FC = () => {
           justify="center"
           pad={size === 'small' ? 'medium' : 'large'}
           background={{
-            image: "url(https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80)",
+            image: "url(https://rand-img.kidwen.top?rand=true)",
             size: "cover",
             position: "center"
           }}
@@ -259,7 +262,7 @@ const HomePage: React.FC = () => {
                       justify="center"
                       overflow="hidden"
                     >
-                      <img
+                      <Image
                         src={previewUrl}
                         alt="预览"
                         className="image-preview"
@@ -324,7 +327,7 @@ const HomePage: React.FC = () => {
                       >
                         {/* 图片预览 */}
                         <Box align="center">
-                          <img
+                          <Image
                             src={url}
                             alt={`上传的图片 ${index + 1}`}
                             className="image-preview"
@@ -393,7 +396,7 @@ const HomePage: React.FC = () => {
               onClickOutside={() => setShowPreview(false)}
             >
               <Box pad="medium" align="center" gap="medium">
-                <img
+                <Image
                   src={uploadedUrls[0]}
                   alt="图片预览"
                   style={{

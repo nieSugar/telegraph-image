@@ -307,160 +307,171 @@ const AdminPage: React.FC = () => {
           )}
 
           {/* 主内容 */}
-          {loading ? (
-            <Card pad="large" align="center" className="custom-card">
-              <Box align="center" gap="medium">
-                <Spinner size="medium" />
-                <Text>加载中...</Text>
-              </Box>
-            </Card>
-          ) : images.length === 0 ? (
-            <Card pad="large" align="center" className="custom-card">
-              <Box align="center" gap="medium">
-                <Text size="large" color="neutral-4">
-                  暂无图片
-                </Text>
-                <Text size="small" color="neutral-4">
-                  还没有上传任何图片，去首页上传第一张图片吧！
-                </Text>
-                <Link href="/" passHref>
-                  <Button label="去上传" primary />
-                </Link>
-              </Box>
-            </Card>
-          ) : size === "small" ? (
-            // 移动端卡片布局
-            <Box gap="medium">
-              {images.map((image) => (
-                <Card key={image.id} pad="medium" className="custom-card">
-                  <Box gap="small">
-                    <Box direction="row" justify="between" align="start">
-                      <Box flex>
-                        <Text weight="bold" truncate>
-                          {image.name}
-                        </Text>
-                        <Text size="small" color="neutral-4">
-                          ID: {image.id}
-                        </Text>
-                        <Text size="small" color="neutral-4">
-                          {image.uploadDate}
-                        </Text>
-                      </Box>
-                      <Box direction="row" gap="xsmall">
-                        <Tip content="复制链接">
-                          <Button
-                            icon={<Copy />}
-                            onClick={() => handleCopyClick(image.url)}
-                            size="small"
-                            className="custom-button"
-                          />
-                        </Tip>
-                        <Tip content="删除图片">
-                          <Button
-                            icon={<Trash />}
-                            onClick={() => handleDeleteClick(image.id)}
-                            size="small"
-                            color="status-critical"
-                            className="custom-button"
-                          />
-                        </Tip>
-                      </Box>
-                    </Box>
-
-                    <Box
-                      align="center"
-                      pad="small"
-                      background="rgba(255,255,255,0.05)"
-                      round="small"
-                    >
-                      <Image
-                        src={image.url}
-                        alt={image.name}
-                        fit="contain"
-                        style={{
-                          maxWidth: "100%",
-                          maxHeight: "200px",
-                          cursor: "pointer",
-                        }}
-                        onClick={() => setPreviewImage(image.url)}
-                      />
-                    </Box>
+          {(() => {
+            if (loading) {
+              return (
+                <Card pad="large" align="center" className="custom-card">
+                  <Box align="center" gap="medium">
+                    <Spinner size="medium" />
+                    <Text>加载中...</Text>
                   </Box>
                 </Card>
-              ))}
-            </Box>
-          ) : (
-            // 桌面端表格布局
-            <Card className="custom-card">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableCell scope="col" border="bottom" pad="small">
-                      <Text weight="bold">ID</Text>
-                    </TableCell>
-                    <TableCell scope="col" border="bottom" pad="small">
-                      <Text weight="bold">文件名</Text>
-                    </TableCell>
-                    <TableCell scope="col" border="bottom" pad="small">
-                      <Text weight="bold">预览</Text>
-                    </TableCell>
-                    <TableCell scope="col" border="bottom" pad="small">
-                      <Text weight="bold">上传时间</Text>
-                    </TableCell>
-                    <TableCell scope="col" border="bottom" pad="small">
-                      <Text weight="bold">操作</Text>
-                    </TableCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              );
+            }
+            if (images.length === 0) {
+              return (
+                <Card pad="large" align="center" className="custom-card">
+                  <Box align="center" gap="medium">
+                    <Text size="large" color="neutral-4">
+                      暂无图片
+                    </Text>
+                    <Text size="small" color="neutral-4">
+                      还没有上传任何图片，去首页上传第一张图片吧！
+                    </Text>
+                    <Link href="/" passHref>
+                      <Button label="去上传" primary />
+                    </Link>
+                  </Box>
+                </Card>
+              );
+            }
+            if (size === "small") {
+              // 移动端卡片布局
+              return (
+                <Box gap="medium">
                   {images.map((image) => (
-                    <TableRow key={image.id}>
-                      <TableCell pad="small">
-                        <Text>{image.id}</Text>
-                      </TableCell>
-                      <TableCell pad="small">
-                        <Text truncate style={{ maxWidth: "200px" }}>
-                          {image.originalName}
-                        </Text>
-                      </TableCell>
-                      <TableCell pad="small">
-                        <img
-                          src={image.url}
-                          alt={image.name}
-                          className="table-thumbnail"
-                          onClick={() => setPreviewImage(image.url)}
-                        />
-                      </TableCell>
-                      <TableCell pad="small">
-                        <Text size="small">{image.uploadDate}</Text>
-                      </TableCell>
-                      <TableCell pad="small">
-                        <Box direction="row" gap="xsmall">
-                          <Tip content="复制链接">
-                            <Button
-                              icon={<Copy />}
-                              onClick={() => handleCopyClick(image.url)}
-                              size="small"
-                              className="custom-button"
-                            />
-                          </Tip>
-                          <Tip content="删除图片">
-                            <Button
-                              icon={<Trash />}
-                              onClick={() => handleDeleteClick(image.id)}
-                              size="small"
-                              color="status-critical"
-                              className="custom-button"
-                            />
-                          </Tip>
+                    <Card key={image.id} pad="medium" className="custom-card">
+                      <Box gap="small">
+                        <Box direction="row" justify="between" align="start">
+                          <Box flex>
+                            <Text weight="bold" truncate>
+                              {image.name}
+                            </Text>
+                            <Text size="small" color="neutral-4">
+                              ID: {image.id}
+                            </Text>
+                            <Text size="small" color="neutral-4">
+                              {image.uploadDate}
+                            </Text>
+                          </Box>
+                          <Box direction="row" gap="xsmall">
+                            <Tip content="复制链接">
+                              <Button
+                                icon={<Copy />}
+                                onClick={() => handleCopyClick(image.url)}
+                                size="small"
+                                className="custom-button"
+                              />
+                            </Tip>
+                            <Tip content="删除图片">
+                              <Button
+                                icon={<Trash />}
+                                onClick={() => handleDeleteClick(image.id)}
+                                size="small"
+                                color="status-critical"
+                                className="custom-button"
+                              />
+                            </Tip>
+                          </Box>
                         </Box>
+
+                        <Box
+                          align="center"
+                          pad="small"
+                          background="rgba(255,255,255,0.05)"
+                          round="small"
+                        >
+                          <Image
+                            src={image.url}
+                            alt={image.name}
+                            fit="contain"
+                            style={{
+                              maxWidth: "100%",
+                              maxHeight: "200px",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => setPreviewImage(image.url)}
+                          />
+                        </Box>
+                      </Box>
+                    </Card>
+                  ))}
+                </Box>
+              );
+            }
+            // 桌面端表格布局
+            return (
+              <Card className="custom-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableCell scope="col" border="bottom" pad="small">
+                        <Text weight="bold">ID</Text>
+                      </TableCell>
+                      <TableCell scope="col" border="bottom" pad="small">
+                        <Text weight="bold">文件名</Text>
+                      </TableCell>
+                      <TableCell scope="col" border="bottom" pad="small">
+                        <Text weight="bold">预览</Text>
+                      </TableCell>
+                      <TableCell scope="col" border="bottom" pad="small">
+                        <Text weight="bold">上传时间</Text>
+                      </TableCell>
+                      <TableCell scope="col" border="bottom" pad="small">
+                        <Text weight="bold">操作</Text>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
+                  </TableHeader>
+                  <TableBody>
+                    {images.map((image) => (
+                      <TableRow key={image.id}>
+                        <TableCell pad="small">
+                          <Text>{image.id}</Text>
+                        </TableCell>
+                        <TableCell pad="small">
+                          <Text truncate style={{ maxWidth: "200px" }}>
+                            {image.originalName}
+                          </Text>
+                        </TableCell>
+                        <TableCell pad="small">
+                          <Image
+                            src={image.url}
+                            alt={image.name}
+                            className="table-thumbnail"
+                            style={{ pointerEvents: "none" }}
+                          />
+                        </TableCell>
+                        <TableCell pad="small">
+                          <Text size="small">{image.uploadDate}</Text>
+                        </TableCell>
+                        <TableCell pad="small">
+                          <Box direction="row" gap="xsmall">
+                            <Tip content="复制链接">
+                              <Button
+                                icon={<Copy />}
+                                onClick={() => handleCopyClick(image.url)}
+                                size="small"
+                                className="custom-button"
+                              />
+                            </Tip>
+                            <Tip content="删除图片">
+                              <Button
+                                icon={<Trash />}
+                                onClick={() => handleDeleteClick(image.id)}
+                                size="small"
+                                color="status-critical"
+                                className="custom-button"
+                              />
+                            </Tip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            );
+          })()}
 
           {/* 分页控件 */}
           {totalItems > itemsPerPage && (
@@ -538,7 +549,7 @@ const AdminPage: React.FC = () => {
                 height="large"
               >
                 <Box flex align="center" justify="center">
-                  <img
+                  <Image
                     src={previewImage}
                     alt="图片预览"
                     style={{
