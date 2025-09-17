@@ -1,20 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { D1ImageDB, ImageRecord, createD1Connection } from '../../../utils/db';
+import { D1ImageDB, createD1Connection } from '../../../utils/db';
+import { ImageDetailResponse } from '@/types';
 
 // 获取D1数据库实例的辅助函数
 async function getDB(): Promise<D1ImageDB> {
   return await createD1Connection();
 }
 
-type ApiResponse = {
-  success: boolean;
-  image?: ImageRecord;
-  message?: string;
-};
-
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<ApiResponse>
+  res: NextApiResponse<ImageDetailResponse>
 ) {
   const { id } = req.query;
   

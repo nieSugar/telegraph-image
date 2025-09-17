@@ -20,7 +20,8 @@
       "@/pages/*": ["./src/pages/*"],
       "@/utils/*": ["./src/utils/*"],
       "@/contexts/*": ["./src/contexts/*"],
-      "@/services/*": ["./src/services/*"]
+      "@/services/*": ["./src/services/*"],
+      "@/types/*": ["./src/types/*"]
     },
 
     // 严格类型检查选项

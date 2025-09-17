@@ -1,39 +1,5 @@
-// 兼容本地（Next.js）运行的 D1Database 类型定义
-interface D1Database {
-  prepare(sql: string): {
-    bind(...params: unknown[]): {
-      first<T = unknown>(): Promise<T | null>;
-      all<T = unknown>(): Promise<{ results: T[] }>;
-      run(): Promise<{ success: boolean; meta: { last_row_id: number }; error?: string }>;
-    };
-  };
-}
-
-// D1 数据库操作工具类
-export interface ImageRecord {
-  id?: number;
-  name: string;
-  originalName: string;
-  url: string;
-  filePath: string;
-  fileFormat: string;
-  fileSize: number;
-  uploadTime?: string;
-  isDeleted?: boolean;
-  deletedAt?: string | null;
-  tags?: string | null;
-  description?: string | null;
-  isPublic?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  // Telegram fields in img table
-  tgMessageId?: number | null;
-  tgFileId?: string | null;
-  tgFilePath?: string | null;
-  tgEndpoint?: string | null;
-  tgFieldName?: string | null;
-  tgFileName?: string | null;
-}
+// 导入类型定义
+import { D1Database, ImageRecord, ImageStats } from '@/types/database';
 
 export class D1ImageDB {
   private db: D1Database;
@@ -201,12 +167,7 @@ export class D1ImageDB {
   }
 
   // 获取图片统计信息
-  async getImageStats(): Promise<{
-    total: number;
-    public: number;
-    deleted: number;
-    totalSize: number;
-  }> {
+  async getImageStats(): Promise<ImageStats> {
     const totalStmt = this.db.prepare(`
       SELECT COUNT(*) as count FROM img
       WHERE (isDeleted IS NULL OR isDeleted = 0)
@@ -279,22 +240,7 @@ export class D1ImageDB {
   }
 }
 
-// 用于 Next.js API 的环境变量类型扩展
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace NodeJS {
-    interface ProcessEnv {
-      CF_ACCOUNT_ID: string;
-      CF_API_TOKEN: string;
-      CF_DATABASE_ID: string;
-      TELEGRAM_BOT_TOKEN: string;
-      TELEGRAM_CHAT_ID: string;
-    }
-  }
-  // Cloudflare Workers 本地绑定（仅在 Workers 环境存在）
-  // eslint-disable-next-line no-var
-  var DB: D1Database | undefined;
-}
+
 
 // 使用 Cloudflare API 直接操作 D1 数据库的类
 import Cloudflare from 'cloudflare';

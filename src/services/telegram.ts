@@ -1,9 +1,11 @@
-export type TelegramFileKind = 'photo' | 'video' | 'audio' | 'document';
-
-type EndpointResolution = {
-  endpoint: 'sendPhoto' | 'sendVideo' | 'sendAudio' | 'sendDocument';
-  fieldName: TelegramFileKind;
-};
+// 导入类型定义
+import {
+  TelegramFileKind,
+  EndpointResolution,
+  TelegramResponse,
+  TelegramUploadResult,
+  TelegramFileInfo
+} from '@/types/telegram';
 
 function resolveEndpointByMime(contentType: string | undefined | null): EndpointResolution {
   const ct = (contentType || '').toLowerCase();
@@ -17,17 +19,9 @@ function resolveEndpointByMime(contentType: string | undefined | null): Endpoint
   return found || { endpoint: 'sendDocument', fieldName: 'document' };
 }
 
-interface TelegramResponse {
-  ok: boolean;
-  result?: {
-    photo?: Array<{ file_id: string; file_size: number; file_name?: string; file_unique_id: string }>;
-    video?: { file_id: string; file_name?: string; file_unique_id: string };
-    document?: { file_id: string; file_name?: string; file_unique_id: string };
-    audio?: { file_id: string; file_name?: string; file_unique_id: string };
-  };
-}
 
-function extractFileFromTelegramMessage(response: TelegramResponse): { file_id: string; file_name?: string } | null {
+
+function extractFileFromTelegramMessage(response: TelegramResponse): TelegramFileInfo | null {
   try {
     if (!response?.ok) return null;
     const result = response.result;
@@ -50,28 +44,7 @@ function extractFileFromTelegramMessage(response: TelegramResponse): { file_id: 
   }
 }
 
-export type TelegramUploadResult = {
-  ok: boolean;
-  chatId?: string;
-  messageId?: number;
-  endpoint: EndpointResolution['endpoint'];
-  fieldName: TelegramFileKind;
-  file?: { file_id: string; file_name?: string } | null;
-  filePath?: string | null;
-  // 可直接落表保存的字段集合（无需 chat_id）
-  persistable?: PersistableTelegramInfo | null;
-  raw: TelegramResponse;
-};
 
-// 需要在 img 表上持久化的 Telegram 字段（不包含 chat_id）
-export type PersistableTelegramInfo = {
-  tgMessageId: number | null;
-  tgFileId: string | null;
-  tgFilePath: string | null;
-  tgEndpoint: EndpointResolution['endpoint'] | null;
-  tgFieldName: TelegramFileKind | null;
-  tgFileName: string | null;
-};
 
 // 参考边缘函数的直传实现：使用 FormData + fetch 将文件直传至 Telegram Bot API
 export async function uploadFileToTelegram(

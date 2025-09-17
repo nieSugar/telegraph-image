@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { D1ImageDB, ImageRecord, createD1Connection } from '../../../utils/db';
+import { D1ImageDB, createD1Connection } from '../../../utils/db';
+import { ImageRecord } from '@/types';
 
 // 获取D1数据库实例的辅助函数
 async function getDB(): Promise<D1ImageDB> {

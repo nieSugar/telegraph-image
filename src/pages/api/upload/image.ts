@@ -2,8 +2,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { formidable, Fields, Files } from 'formidable';
 import fs from 'fs';
 import path from 'path';
-import { D1ImageDB, ImageRecord, createD1Connection } from '../../../utils/db';
+import { D1ImageDB, createD1Connection } from '../../../utils/db';
 import { uploadFileToTelegram } from '../../../services/telegram';
+import { ImageRecord, UploadResponseData } from '@/types';
 
 // 禁用Next.js的默认body解析，以支持form-data
 export const config = {
@@ -12,22 +13,7 @@ export const config = {
   },
 };
 
-type UploadResponseData = {
-  success: boolean;
-  urls?: string[];
-  images?: {
-    id: number;
-    url: string;
-    name: string;
-    fileSize: number;
-    fileFormat: string;
-    telegram?: {
-      chat_id: string;
-      message_id: number;
-    };
-  }[];
-  message?: string;
-};
+
 
 // 获取D1数据库实例的辅助函数
 async function getDB(): Promise<D1ImageDB> {

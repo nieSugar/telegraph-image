@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/router';
-import { AuthContext } from './AuthContextType';
+import { AuthContextType } from '@/types/auth';
 import { isAuthenticated as checkAuth, saveAuthState } from '../utils/authUtils';
+
+// 创建上下文
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // 上下文提供者组件
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {

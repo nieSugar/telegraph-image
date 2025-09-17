@@ -1,9 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-
-type LoginResponseData = {
-  success: boolean;
-  message?: string;
-};
+import { LoginResponseData } from '@/types/api';
 
 // 默认认证配置
 const DEFAULT_USERNAME = 'admin';
