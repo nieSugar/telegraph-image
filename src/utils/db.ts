@@ -1,9 +1,9 @@
 // 兼容本地（Next.js）运行的 D1Database 类型定义
 interface D1Database {
   prepare(sql: string): {
-    bind(...params: any[]): {
-      first<T = any>(): Promise<T | null>;
-      all<T = any>(): Promise<{ results: T[] }>;
+    bind(...params: unknown[]): {
+      first<T = unknown>(): Promise<T | null>;
+      all<T = unknown>(): Promise<{ results: T[] }>;
       run(): Promise<{ success: boolean; meta: { last_row_id: number }; error?: string }>;
     };
   };
@@ -74,15 +74,15 @@ export class D1ImageDB {
   // 根据ID获取图片
   async getImageById(id: number): Promise<ImageRecord | null> {
     const stmt = this.db.prepare(`SELECT * FROM img WHERE id = ? AND (isDeleted IS NULL OR isDeleted = 0)`);
-    const result = await stmt.bind(id).first();
-    return result||[];
+    const result = await stmt.bind(id).first<ImageRecord>();
+    return result || null;
   }
 
   // 根据URL获取图片
   async getImageByUrl(url: string): Promise<ImageRecord | null> {
     const stmt = this.db.prepare(`SELECT * FROM img WHERE url = ? AND (isDeleted IS NULL OR isDeleted = 0)`);
-    const result = await stmt.bind(url).first();
-    return result||[];
+    const result = await stmt.bind(url).first<ImageRecord>();
+    return result || null;
   }
 
   // 获取所有公开图片（分页）
@@ -95,7 +95,7 @@ export class D1ImageDB {
       ORDER BY createdAt DESC
       LIMIT ? OFFSET ?
     `);
-    const result = await stmt.bind(limit, offset).all();
+    const result = await stmt.bind(limit, offset).all<ImageRecord>();
     return result.results || [];
   }
 
@@ -108,7 +108,7 @@ export class D1ImageDB {
       ORDER BY createdAt DESC
       LIMIT ? OFFSET ?
     `);
-    const result = await stmt.bind(limit, offset).all();
+    const result = await stmt.bind(limit, offset).all<ImageRecord>();
     return result.results || [];
   }
 
@@ -134,7 +134,7 @@ export class D1ImageDB {
     }
 
     // 验证删除是否成功（可选验证）
-    if (result.meta && 'changes' in result.meta && (result.meta as any).changes === 0) {
+    if (result.meta && 'changes' in result.meta && (result.meta as { changes?: number }).changes === 0) {
       throw new Error(`No rows were updated when deleting image with id ${id}`);
     }
   }
@@ -142,7 +142,7 @@ export class D1ImageDB {
   // 更新图片信息
   async updateImage(id: number, updates: Partial<Pick<ImageRecord, 'name' | 'tags' | 'description' | 'isPublic'>>): Promise<void> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
 
     if (updates.name !== undefined) {
       fields.push('name = ?');
@@ -196,7 +196,7 @@ export class D1ImageDB {
       LIMIT ? OFFSET ?
     `);
 
-    const result = await stmt.bind(searchPattern, searchPattern, searchPattern, limit, offset).all();
+    const result = await stmt.bind(searchPattern, searchPattern, searchPattern, limit, offset).all<ImageRecord>();
     return result.results || [];
   }
 
@@ -246,7 +246,7 @@ export class D1ImageDB {
     info: Partial<Pick<ImageRecord, 'tgMessageId' | 'tgFileId' | 'tgFilePath' | 'tgEndpoint' | 'tgFieldName' | 'tgFileName'>>
   ): Promise<void> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
 
     if (info.tgMessageId !== undefined) { fields.push('tgMessageId = ?'); values.push(info.tgMessageId); }
     if (info.tgFileId !== undefined) { fields.push('tgFileId = ?'); values.push(info.tgFileId); }
@@ -274,13 +274,14 @@ export class D1ImageDB {
   // 通过 tgFileId 获取图片
   async getImageByTelegramFileId(fileId: string): Promise<ImageRecord | null> {
     const stmt = this.db.prepare(`SELECT * FROM img WHERE tgFileId = ? AND (isDeleted IS NULL OR isDeleted = 0)`);
-    const result = await stmt.bind(fileId).first();
-    return result||[];
+    const result = await stmt.bind(fileId).first<ImageRecord>();
+    return result || null;
   }
 }
 
 // 用于 Next.js API 的环境变量类型扩展
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
     interface ProcessEnv {
       CF_ACCOUNT_ID: string;
@@ -309,12 +310,12 @@ export class CloudflareD1Client {
     this.cf = new Cloudflare({ apiToken });
   }
 
-  async query(sql: string, params: any[] = []): Promise<any> {
+  async query(sql: string, params: unknown[] = []): Promise<{ results?: unknown[]; success?: boolean; meta?: { last_row_id?: number } }> {
     try {
       const page = await this.cf.d1.database.query(this.databaseId, {
         account_id: this.accountId,
         sql,
-        params,
+        params: params as string[],
       });
       // SDK returns a SinglePage<QueryResult> with `result` array
       // Gracefully handle empty result sets
@@ -332,14 +333,14 @@ export class CloudflareD1Client {
   // 模拟 D1Database 接口
   prepare(sql: string) {
     return {
-      bind: (...params: any[]) => ({
-        first: async <T = any>(): Promise<T | null> => {
+      bind: (...params: unknown[]) => ({
+        first: async <T = unknown>(): Promise<T | null> => {
           const result = await this.query(sql, params);
-          return result.results?.[0] || null;
+          return (result.results?.[0] as T) || null;
         },
-        all: async <T = any>(): Promise<{ results: T[] }> => {
+        all: async <T = unknown>(): Promise<{ results: T[] }> => {
           const result = await this.query(sql, params);
-          return { results: result.results || [] };
+          return { results: (result.results as T[]) || [] };
         },
         run: async (): Promise<{ success: boolean; meta: { last_row_id: number }; error?: string }> => {
           try {
@@ -378,5 +379,5 @@ export async function createD1Connection(): Promise<D1ImageDB> {
   }
 
   const d1Client = new CloudflareD1Client(accountId, apiToken, databaseId);
-  return new D1ImageDB(d1Client as any);
+  return new D1ImageDB(d1Client as D1Database);
 }

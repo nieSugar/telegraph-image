@@ -17,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // 优先从数据库获取 tgFilePath（若已缓存），失败则调用 Telegram API 获取
   let filePath: string | null = null;
   let imageIdToUpdate: number | null = null;
-  let imageRecord: any = null; // 存储完整的图片记录，用于获取原始文件名
+  let imageRecord: { originalName?: string; name?: string; tgFileName?: string | null } | null = null; // 存储完整的图片记录，用于获取原始文件名
 
   try {
     const db = await createD1Connection();
@@ -40,7 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         tgFilePath: filePath,
       }).catch(() => void 0);
     }
-  } catch (_) {
+  } catch {
     // 数据库不可用时，直接走 Telegram API
     try {
       filePath = await getTelegramFilePath(fileId);
@@ -70,7 +70,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (wantsJson) {
       // 返回JSON格式的base64数据，包含原始文件名
       const base64Data = Buffer.from(fileBuffer).toString('base64');
-      const response: any = {
+      const response: {
+        success: boolean;
+        data: string;
+        contentType: string;
+        size: number;
+        originalName?: string;
+        name?: string;
+        tgFileName?: string;
+      } = {
         success: true,
         data: base64Data,
         contentType: contentType,

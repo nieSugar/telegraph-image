@@ -98,7 +98,8 @@ const AdminPage: React.FC = () => {
     setRefreshing(true);
     await fetchImages(currentPage);
     setRefreshing(false);
-  }, [currentPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]); // fetchImages is stable, no need to include
 
   const handleDeleteClick = useCallback((id: number) => {
     setSelectedImageId(id);
@@ -134,7 +135,8 @@ const AdminPage: React.FC = () => {
     } else {
       setShowConfirm(false);
     }
-  }, [selectedImageId, currentPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedImageId, currentPage]); // fetchImages is stable, no need to include
 
   const handleCopyClick = useCallback(async (url: string) => {
     try {

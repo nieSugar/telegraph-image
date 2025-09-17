@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { formidable } from 'formidable';
+import { formidable, Fields, Files } from 'formidable';
 import fs from 'fs';
 import path from 'path';
 import { D1ImageDB, ImageRecord, createD1Connection } from '../../../utils/db';
@@ -132,20 +132,20 @@ export default async function handler(
     });
 
     // 解析表单数据
-    let fields: any, files: any;
+    let fields: Fields, files: Files;
     try {
       [fields, files] = await form.parse(req);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Form parsing error:', error);
 
-      if (error.code === 'LIMIT_FILE_SIZE') {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({
           success: false,
           message: '文件大小超过限制（最大10MB）'
         });
       }
 
-      if (error.code === 'LIMIT_FILE_COUNT') {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'LIMIT_FILE_COUNT') {
         return res.status(400).json({
           success: false,
           message: '一次只能上传一个文件'

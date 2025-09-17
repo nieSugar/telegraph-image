@@ -70,20 +70,7 @@ html, body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-/* 加载动画 */
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
 
-.loading-spinner {
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top: 2px solid #ffffff;
-  width: 20px;
-  height: 20px;
-  animation: spin 1s linear infinite;
-}
 
 /* 响应式设计 */
 @media (max-width: 768px) {

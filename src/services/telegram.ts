@@ -17,12 +17,22 @@ function resolveEndpointByMime(contentType: string | undefined | null): Endpoint
   return found || { endpoint: 'sendDocument', fieldName: 'document' };
 }
 
-function extractFileFromTelegramMessage(response: any): { file_id: string; file_name?: string } | null {
+interface TelegramResponse {
+  ok: boolean;
+  result?: {
+    photo?: Array<{ file_id: string; file_size: number; file_name?: string; file_unique_id: string }>;
+    video?: { file_id: string; file_name?: string; file_unique_id: string };
+    document?: { file_id: string; file_name?: string; file_unique_id: string };
+    audio?: { file_id: string; file_name?: string; file_unique_id: string };
+  };
+}
+
+function extractFileFromTelegramMessage(response: TelegramResponse): { file_id: string; file_name?: string } | null {
   try {
     if (!response?.ok) return null;
     const result = response.result;
     if (result?.photo) {
-      const largest = result.photo.reduce((prev: any, curr: any) => (prev.file_size > curr.file_size ? prev : curr));
+      const largest = result.photo.reduce((prev, curr) => (prev.file_size > curr.file_size ? prev : curr));
       return { file_id: largest.file_id, file_name: largest.file_name || largest.file_unique_id };
     }
     if (result?.video) {
@@ -50,7 +60,7 @@ export type TelegramUploadResult = {
   filePath?: string | null;
   // 可直接落表保存的字段集合（无需 chat_id）
   persistable?: PersistableTelegramInfo | null;
-  raw: any;
+  raw: TelegramResponse;
 };
 
 // 需要在 img 表上持久化的 Telegram 字段（不包含 chat_id）
@@ -78,7 +88,7 @@ export async function uploadFileToTelegram(
   const { endpoint, fieldName } = resolveEndpointByMime(contentType);
   const url = `https://api.telegram.org/bot${token}/${endpoint}`;
 
-  const blob = file instanceof Blob ? file : new Blob([file as any], { type: contentType || 'application/octet-stream' });
+  const blob = file instanceof Blob ? file : new Blob([new Uint8Array(file as ArrayBuffer)], { type: contentType || 'application/octet-stream' });
   const form = new FormData();
   form.append('chat_id', chatId);
   if (caption) form.append('caption', caption);
