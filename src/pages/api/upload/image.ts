@@ -72,25 +72,8 @@ export default async function handler(
   }
 
   try {
-    // 创建上传目录
-    const uploadDir = path.join(process.cwd(), 'tmp');
-
-    // 确保上传目录存在
-    try {
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-    } catch (error) {
-      console.error('Failed to create upload directory:', error);
-      return res.status(500).json({
-        success: false,
-        message: '服务器配置错误，无法创建上传目录'
-      });
-    }
-
     // 使用formidable解析上传的文件，并配置选项
     const form = formidable({
-      uploadDir,
       keepExtensions: true,
       maxFileSize: 10 * 1024 * 1024, // 限制10MB
       maxFiles: 1, // 限制单次只能上传一个文件
