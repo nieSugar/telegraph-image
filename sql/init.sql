@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS img (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,                    -- 文件名（存储时的名称）
     originalName TEXT NOT NULL,            -- 原始文件名
-    url TEXT NOT NULL UNIQUE,              -- 图片访问URL
+    url TEXT NOT NULL,                     -- 图片访问URL
     filePath TEXT NOT NULL,                -- 文件路径
     fileFormat TEXT NOT NULL,              -- 文件格式（jpg, png, gif等）
     fileSize INTEGER NOT NULL,             -- 文件大小（字节）
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS img (
 
     -- Telegram 相关字段
     tgMessageId INTEGER,                   -- Telegram 消息ID
-    tgFileId TEXT UNIQUE,                  -- Telegram 文件ID（可用于 getFile）
+    tgFileId TEXT,                         -- Telegram 文件ID（可用于 getFile）
     tgFilePath TEXT,                       -- Telegram 文件路径（getFile 返回）
     tgEndpoint TEXT,                       -- 使用的发送接口（sendPhoto/sendDocument/...）
     tgFieldName TEXT,                      -- 字段名（photo/video/audio/document）
@@ -26,7 +26,6 @@ CREATE TABLE IF NOT EXISTS img (
 );
 
 -- 创建索引提高查询性能
-CREATE INDEX IF NOT EXISTS idx_img_url ON img(url);
 CREATE INDEX IF NOT EXISTS idx_img_isPublic ON img(isPublic);
 CREATE INDEX IF NOT EXISTS idx_img_isDeleted ON img(isDeleted);
 CREATE INDEX IF NOT EXISTS idx_img_createdAt ON img(createdAt);
