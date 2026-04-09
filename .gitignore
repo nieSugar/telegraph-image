@@ -18,6 +18,7 @@ yarn.lock
 .vscode/*
 !.vscode/extensions.json
 .idea
+.cursor/
 .DS_Store
 *.suo
 *.ntvs*
@@ -27,6 +28,7 @@ yarn.lock
 tmp
 .next
 .open-next
+.wrangler/
 
 # Environment variables
 .env

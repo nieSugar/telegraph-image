@@ -238,26 +238,67 @@ export class D1ImageDB {
     return result || null;
   }
 }
+type CloudflareQueryPage = {
+  result?: Array<{
+    results?: unknown[];
+    success?: boolean;
+    meta?: { last_row_id?: number };
+  }>;
+};
 
+type CloudflareClient = {
+  d1: {
+    database: {
+      query: (
+        databaseId: string,
+        options: { account_id: string; sql: string; params: string[] }
+      ) => Promise<CloudflareQueryPage>;
+    };
+  };
+};
 
+type CloudflareClientCtor = new (options: { apiToken: string }) => CloudflareClient;
+type CloudflareModule = { default: CloudflareClientCtor };
+
+let cloudflareClientCtorPromise: Promise<CloudflareClientCtor> | null = null;
+
+async function loadCloudflareClientCtor(): Promise<CloudflareClientCtor> {
+  if (!cloudflareClientCtorPromise) {
+    // Avoid bundling the Node SDK into the Worker build. It is only needed in the Node fallback path.
+    const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<CloudflareModule>;
+    cloudflareClientCtorPromise = dynamicImport('cloudflare').then((mod) => mod.default);
+  }
+
+  return cloudflareClientCtorPromise;
+}
 
 // 使用 Cloudflare API 直接操作 D1 数据库的类
-import Cloudflare from 'cloudflare';
 
 export class CloudflareD1Client {
   private accountId: string;
   private databaseId: string;
-  private cf: Cloudflare;
+  private apiToken: string;
+  private cf: CloudflareClient | null = null;
 
   constructor(accountId: string, apiToken: string, databaseId: string) {
     this.accountId = accountId;
     this.databaseId = databaseId;
-    this.cf = new Cloudflare({ apiToken });
+    this.apiToken = apiToken;
+  }
+
+  private async getClient(): Promise<CloudflareClient> {
+    if (!this.cf) {
+      const Cloudflare = await loadCloudflareClientCtor();
+      this.cf = new Cloudflare({ apiToken: this.apiToken });
+    }
+
+    return this.cf;
   }
 
   async query(sql: string, params: unknown[] = []): Promise<{ results?: unknown[]; success?: boolean; meta?: { last_row_id?: number } }> {
     try {
-      const page = await this.cf.d1.database.query(this.databaseId, {
+      const cf = await this.getClient();
+      const page = await cf.d1.database.query(this.databaseId, {
         account_id: this.accountId,
         sql,
         params: params as string[],
