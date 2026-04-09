@@ -1,4 +1,5 @@
 // 导入类型定义
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { D1Database, ImageRecord, ImageStats } from '@/types/database';
 
 export class D1ImageDB {
@@ -264,12 +265,32 @@ let cloudflareClientCtorPromise: Promise<CloudflareClientCtor> | null = null;
 
 async function loadCloudflareClientCtor(): Promise<CloudflareClientCtor> {
   if (!cloudflareClientCtorPromise) {
-    // Avoid bundling the Node SDK into the Worker build. It is only needed in the Node fallback path.
-    const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<CloudflareModule>;
-    cloudflareClientCtorPromise = dynamicImport('cloudflare').then((mod) => mod.default);
+    cloudflareClientCtorPromise = import('cloudflare').then(
+      (mod) => (mod as CloudflareModule).default
+    );
   }
 
   return cloudflareClientCtorPromise;
+}
+
+type CloudflareRuntimeEnv = {
+  DB?: D1Database;
+};
+
+function getWorkerD1Binding(): { db: D1Database | null; isCloudflareRuntime: boolean } {
+  if (typeof globalThis.DB !== 'undefined') {
+    return { db: globalThis.DB, isCloudflareRuntime: true };
+  }
+
+  try {
+    const { env } = getCloudflareContext();
+    return {
+      db: (env as CloudflareRuntimeEnv).DB ?? null,
+      isCloudflareRuntime: true
+    };
+  } catch {
+    return { db: null, isCloudflareRuntime: false };
+  }
 }
 
 // 使用 Cloudflare API 直接操作 D1 数据库的类
@@ -348,9 +369,14 @@ export class CloudflareD1Client {
 
 // 创建数据库连接
 export async function createD1Connection(): Promise<D1ImageDB> {
-  // 在 Cloudflare Workers 环境中，D1 数据库会自动注入到 env.DB
-  if (typeof globalThis.DB !== 'undefined') {
-    return new D1ImageDB(globalThis.DB);
+  const { db, isCloudflareRuntime } = getWorkerD1Binding();
+
+  if (db) {
+    return new D1ImageDB(db);
+  }
+
+  if (isCloudflareRuntime) {
+    throw new Error('Cloudflare runtime is missing D1 binding `DB`. Please configure `d1_databases` in `wrangler.jsonc` and redeploy.');
   }
   
   // 在 Next.js 环境中，使用 Cloudflare API 直接操作
