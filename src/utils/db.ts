@@ -243,35 +243,13 @@ type CloudflareQueryPage = {
   result?: Array<{
     results?: unknown[];
     success?: boolean;
-    meta?: { last_row_id?: number };
+    meta?: { last_row_id?: number; changes?: number };
+    error?: string;
   }>;
+  success?: boolean;
+  errors?: Array<{ message?: string }>;
+  messages?: Array<{ message?: string }>;
 };
-
-type CloudflareClient = {
-  d1: {
-    database: {
-      query: (
-        databaseId: string,
-        options: { account_id: string; sql: string; params: string[] }
-      ) => Promise<CloudflareQueryPage>;
-    };
-  };
-};
-
-type CloudflareClientCtor = new (options: { apiToken: string }) => CloudflareClient;
-type CloudflareModule = { default: CloudflareClientCtor };
-
-let cloudflareClientCtorPromise: Promise<CloudflareClientCtor> | null = null;
-
-async function loadCloudflareClientCtor(): Promise<CloudflareClientCtor> {
-  if (!cloudflareClientCtorPromise) {
-    cloudflareClientCtorPromise = import('cloudflare').then(
-      (mod) => (mod as CloudflareModule).default
-    );
-  }
-
-  return cloudflareClientCtorPromise;
-}
 
 type CloudflareRuntimeEnv = {
   DB?: D1Database;
@@ -299,7 +277,6 @@ export class CloudflareD1Client {
   private accountId: string;
   private databaseId: string;
   private apiToken: string;
-  private cf: CloudflareClient | null = null;
 
   constructor(accountId: string, apiToken: string, databaseId: string) {
     this.accountId = accountId;
@@ -307,27 +284,44 @@ export class CloudflareD1Client {
     this.apiToken = apiToken;
   }
 
-  private async getClient(): Promise<CloudflareClient> {
-    if (!this.cf) {
-      const Cloudflare = await loadCloudflareClientCtor();
-      this.cf = new Cloudflare({ apiToken: this.apiToken });
-    }
-
-    return this.cf;
+  private getQueryEndpoint(): string {
+    return `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/d1/database/${this.databaseId}/query`;
   }
 
-  async query(sql: string, params: unknown[] = []): Promise<{ results?: unknown[]; success?: boolean; meta?: { last_row_id?: number } }> {
+  async query(sql: string, params: unknown[] = []): Promise<{ results?: unknown[]; success?: boolean; meta?: { last_row_id?: number; changes?: number } }> {
     try {
-      const cf = await this.getClient();
-      const page = await cf.d1.database.query(this.databaseId, {
-        account_id: this.accountId,
-        sql,
-        params: params as string[],
+      const response = await fetch(this.getQueryEndpoint(), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sql,
+          params
+        })
       });
+
+      if (!response.ok) {
+        throw new Error(`Cloudflare D1 API request failed with status ${response.status}`);
+      }
+
+      const page = await response.json() as CloudflareQueryPage;
       const first = page.result?.[0];
+
+      if (!page.success || first?.success === false) {
+        const apiMessage =
+          first?.error ||
+          page.errors?.map((item) => item.message).filter(Boolean).join('; ') ||
+          page.messages?.map((item) => item.message).filter(Boolean).join('; ') ||
+          'Unknown Cloudflare D1 API error';
+        throw new Error(apiMessage);
+      }
+
       if (!first) {
         return { results: [], success: true, meta: {} };
       }
+
       return first;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

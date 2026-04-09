@@ -11,9 +11,6 @@ importers:
       axios:
         specifier: ^1.15.0
         version: 1.15.0
-      cloudflare:
-        specifier: ^5.2.0
-        version: 5.2.0
       formidable:
         specifier: ^3.5.4
         version: 3.5.4
@@ -1630,9 +1627,6 @@ packages:
 
   cloudflare@4.5.0:
     resolution: {integrity: sha512-fPcbPKx4zF45jBvQ0z7PCdgejVAPBBCZxwqk1k7krQNfpM07Cfj97/Q6wBzvYqlWXx/zt1S9+m8vnfCe06umbQ==}
-
-  cloudflare@5.2.0:
-    resolution: {integrity: sha512-dVzqDpPFYR9ApEC9e+JJshFJZXcw4HzM8W+3DHzO5oy9+8rLC53G7x6fEf9A7/gSuSCxuvndzui5qJKftfIM9A==}
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -5135,18 +5129,6 @@ snapshots:
       wrap-ansi: 9.0.2
 
   cloudflare@4.5.0:
-    dependencies:
-      '@types/node': 18.19.124
-      '@types/node-fetch': 2.6.13
-      abort-controller: 3.0.0
-      agentkeepalive: 4.6.0
-      form-data-encoder: 1.7.2
-      formdata-node: 4.4.1
-      node-fetch: 2.7.0
-    transitivePeerDependencies:
-      - encoding
-
-  cloudflare@5.2.0:
     dependencies:
       '@types/node': 18.19.124
       '@types/node-fetch': 2.6.13
