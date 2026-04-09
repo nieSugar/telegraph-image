@@ -1,28 +1,15 @@
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
+import Head from 'next/head';
+import { useAuth } from '../contexts/useAuth';
+import Toast, { createToast } from '../components/Toast';
+import type { ToastItem } from '../components/Toast';
+import Modal from '../components/Modal';
 import {
-  Box,
-  Button,
-  Card,
-  Heading,
-  Image,
-  Layer,
-  Notification,
-  Pagination,
-  ResponsiveContext,
-  Spinner,
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TableRow,
-  Text,
-  Tip,
-} from "grommet";
-import { Copy, Home, Logout, Refresh, Trash } from "grommet-icons";
-import Link from "next/link";
-import React, { useCallback, useEffect, useState } from "react";
-import { useAuth } from "../contexts/useAuth";
+  IconCopy, IconTrash, IconHome, IconLogOut, IconRefresh,
+  IconChevronLeft, IconChevronRight, IconImage, IconX,
+} from '../components/Icons';
 
-// API 返回的图片类型（对齐后端 ImageRecord 的关键字段）
 interface ApiImageItem {
   id: number;
   name: string;
@@ -32,7 +19,6 @@ interface ApiImageItem {
   uploadTime?: string;
 }
 
-// 前端展示用类型
 interface ImageItem {
   id: number;
   name: string;
@@ -44,538 +30,388 @@ interface ImageItem {
 interface ImagesApiResponse {
   success: boolean;
   images?: ApiImageItem[];
-  stats?: {
-    total: number;
-    public: number;
-    deleted: number;
-    totalSize: number;
-  };
-  pagination?: {
-    page: number;
-    limit: number;
-    hasMore: boolean;
-  };
+  stats?: { total: number; public: number; deleted: number; totalSize: number };
+  pagination?: { page: number; limit: number; hasMore: boolean };
   message?: string;
+}
+
+function useIsMobile(breakpoint = 768) {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < breakpoint);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [breakpoint]);
+  return mobile;
 }
 
 const AdminPage: React.FC = () => {
   const [images, setImages] = useState<ImageItem[]>([]);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [copyVisible, setCopyVisible] = useState(false);
-  const [selectedImageId, setSelectedImageId] = useState<number | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [stats, setStats] = useState<{
-    total: number;
-    public: number;
-    deleted: number;
-    totalSize: number;
-  } | null>(null);
-  const { logout } = useAuth();
-
-  // 分页相关状态
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20);
-  const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [stats, setStats] = useState<ImagesApiResponse['stats'] | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const itemsPerPage = 20;
 
-  // 计算当前页面展示的区间
-  const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalItems);
-  const indexOfFirstItem = Math.min(
-    indexOfLastItem - itemsPerPage + 1,
-    indexOfLastItem
-  );
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // 处理页面变化
-  const handlePageChange = useCallback((pageNumber: number) => {
-    setCurrentPage(pageNumber);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const { logout } = useAuth();
+  const isMobile = useIsMobile();
+
+  const addToast = useCallback((message: string, type: ToastItem['type'] = 'info') => {
+    setToasts((prev) => [...prev, createToast(message, type)]);
   }, []);
 
-  // 刷新数据
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const formatDate = useCallback((input?: string) => {
+    if (!input) return '';
+    try {
+      const d = new Date(input);
+      if (isNaN(d.getTime())) return input;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    } catch { return input; }
+  }, []);
+
+  const fetchImages = useCallback(async (page: number) => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const res = await fetch(`/api/images?page=${page}&limit=${itemsPerPage}&stats=true`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: ImagesApiResponse = await res.json();
+      if (!data.success) throw new Error(data.message || 'Failed');
+
+      setImages((data.images || []).map((img) => ({
+        id: img.id,
+        name: img.name,
+        originalName: img.originalName,
+        url: img.url,
+        uploadDate: formatDate(img.createdAt || img.uploadTime),
+      })));
+      setTotalItems(data.stats?.total ?? (data.images?.length || 0));
+      setStats(data.stats || null);
+    } catch (e) {
+      setImages([]);
+      setTotalItems(0);
+      setStats(null);
+      setFetchError(e instanceof Error ? e.message : '获取图片列表失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [formatDate]);
+
+  useEffect(() => { fetchImages(currentPage); }, [currentPage, fetchImages]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchImages(currentPage);
     setRefreshing(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]); // fetchImages is stable, no need to include
+  }, [currentPage, fetchImages]);
 
   const handleDeleteClick = useCallback((id: number) => {
-    setSelectedImageId(id);
+    setSelectedId(id);
     setDeleteError(null);
     setShowConfirm(true);
   }, []);
 
   const confirmDelete = useCallback(async () => {
-    if (selectedImageId) {
-      setDeleteLoading(true);
-      setDeleteError(null);
-
-      try {
-        const response = await fetch(`/api/images/${selectedImageId}`, {
-          method: "DELETE",
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          await fetchImages(currentPage);
-          setShowConfirm(false);
-          setSelectedImageId(null);
-        } else {
-          setDeleteError(data.message || "删除失败");
-        }
-      } catch (error) {
-        console.error("删除请求失败:", error);
-        setDeleteError("删除请求失败，请稍后再试");
-      } finally {
-        setDeleteLoading(false);
-      }
-    } else {
-      setShowConfirm(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedImageId, currentPage]); // fetchImages is stable, no need to include
-
-  const handleCopyClick = useCallback(async (url: string) => {
+    if (!selectedId) { setShowConfirm(false); return; }
+    setDeleteLoading(true);
+    setDeleteError(null);
     try {
-      const fullUrl = url.startsWith("http")
-        ? url
-        : `${window.location.origin}${url}`;
-      await navigator.clipboard.writeText(fullUrl);
-      setCopyVisible(true);
-    } catch (error) {
-      console.error("Copy failed:", error);
-      // 降级方案
-      const textArea = document.createElement("textarea");
-      textArea.value = url.startsWith("http")
-        ? url
-        : `${window.location.origin}${url}`;
-      document.body.appendChild(textArea);
-      textArea.select();
-      try {
-        document.execCommand("copy");
-        setCopyVisible(true);
-      } catch (e) {
-        console.error("Fallback copy failed:", e);
+      const res = await fetch(`/api/images/${selectedId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        await fetchImages(currentPage);
+        setShowConfirm(false);
+        setSelectedId(null);
+        addToast('图片已删除', 'success');
+      } else {
+        setDeleteError(data.message || '删除失败');
       }
-      document.body.removeChild(textArea);
-    }
-  }, []);
-
-  const formatDate = useCallback((input?: string) => {
-    if (!input) return "";
-    try {
-      const d = new Date(input);
-      if (isNaN(d.getTime())) return input;
-      const y = d.getFullYear();
-      const m = `${d.getMonth() + 1}`.padStart(2, "0");
-      const day = `${d.getDate()}`.padStart(2, "0");
-      const hh = `${d.getHours()}`.padStart(2, "0");
-      const mm = `${d.getMinutes()}`.padStart(2, "0");
-      return `${y}-${m}-${day} ${hh}:${mm}`;
     } catch {
-      return input;
+      setDeleteError('删除请求失败，请稍后再试');
+    } finally {
+      setDeleteLoading(false);
     }
-  }, []);
+  }, [selectedId, currentPage, fetchImages, addToast]);
 
-  const fetchImages = useCallback(
-    async (page: number) => {
-      setLoading(true);
-      setDeleteError(null);
+  const handleCopy = useCallback(async (url: string) => {
+    const full = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+    try {
+      await navigator.clipboard.writeText(full);
+      addToast('链接已复制', 'success');
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = full;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      addToast('链接已复制', 'success');
+    }
+  }, [addToast]);
 
-      try {
-        const res = await fetch(
-          `/api/images?page=${page}&limit=${itemsPerPage}`,
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
+  const paginationPages = useMemo(() => {
+    const pages: (number | 'dots')[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('dots');
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push('dots');
+      pages.push(totalPages);
+    }
+    return pages;
+  }, [totalPages, currentPage]);
 
-        const data: ImagesApiResponse = await res.json();
-
-        if (!data.success) {
-          throw new Error(data.message || "Failed to fetch images");
-        }
-
-        const list = (data.images || []).map((img) => ({
-          id: img.id,
-          name: img.name,
-          originalName: img.originalName,
-          url: img.url,
-          uploadDate: formatDate(img.createdAt || img.uploadTime),
-        }));
-
-        setImages(list);
-        setTotalItems(data.stats?.total ?? list.length);
-        setStats(data.stats || null);
-      } catch (error) {
-        console.error("Failed to fetch images:", error);
-        setImages([]);
-        setTotalItems(0);
-        setStats(null);
-        setDeleteError(
-          error instanceof Error ? error.message : "获取图片列表失败"
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [itemsPerPage, formatDate]
-  );
-
-  useEffect(() => {
-    fetchImages(currentPage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  const indexFirst = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const indexLast = Math.min(currentPage * itemsPerPage, totalItems);
 
   return (
-    <ResponsiveContext.Consumer>
-      {(size) => (
-        <Box
-          fill
-          pad={size === "small" ? "small" : "medium"}
-          background="background"
-        >
-          {/* 头部 */}
-          <Card
-            pad="medium"
-            margin={{ bottom: "medium" }}
-            className="custom-card"
-          >
-            <Box direction="row" justify="between" align="center" wrap>
-              <Box direction="row" align="center" gap="medium">
-                <Heading level={2} margin="none">
+    <>
+      <Head>
+        <title>图片管理 — Telegraph Image</title>
+      </Head>
+
+      <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: isMobile ? 12 : 24 }}>
+        <div className="page-enter" style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+          {/* Header */}
+          <div className="card" style={{ padding: isMobile ? '16px' : '20px 28px', marginBottom: isMobile ? 12 : 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap' }}>
+                <h1 className="text-display" style={{ fontSize: isMobile ? 22 : 26, fontWeight: 600, margin: 0, lineHeight: 1.2 }}>
                   图片管理
-                </Heading>
+                </h1>
                 {stats && (
-                  <Box direction="row" gap="small" align="center">
-                    <Text size="small" color="neutral-4">
-                      共 {stats.total} 张图片
-                    </Text>
-                  </Box>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    {stats.total} 张图片
+                  </span>
                 )}
-              </Box>
+              </div>
 
-              <Box direction="row" gap="small" align="center">
-                <Tip content="刷新数据">
-                  <Button
-                    icon={refreshing ? <Spinner size="small" /> : <Refresh />}
-                    onClick={handleRefresh}
-                    disabled={refreshing || loading}
-                    className="custom-button"
-                  />
-                </Tip>
-
-                <Link href="/" passHref>
-                  <Button
-                    icon={<Home />}
-                    label={size !== "small" ? "返回首页" : undefined}
-                    className="custom-button"
-                  />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  className="btn btn-ghost btn-icon"
+                  onClick={handleRefresh}
+                  disabled={refreshing || loading}
+                  title="刷新"
+                >
+                  {refreshing ? <span className="spinner spinner-sm" /> : <IconRefresh size={18} />}
+                </button>
+                <Link href="/" style={{ textDecoration: 'none' }}>
+                  <button className="btn btn-ghost btn-icon" title="首页">
+                    <IconHome size={18} />
+                  </button>
                 </Link>
+                <button className="btn btn-danger btn-icon" onClick={logout} title="退出">
+                  <IconLogOut size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
 
-                <Button
-                  icon={<Logout />}
-                  label={size !== "small" ? "退出登录" : undefined}
-                  onClick={logout}
-                  color="status-critical"
-                  className="custom-button"
-                />
-              </Box>
-            </Box>
-          </Card>
-
-          {/* 错误信息 */}
-          {deleteError && !showConfirm && (
-            <Box
-              pad="medium"
-              background="status-critical"
-              round="medium"
-              margin={{ bottom: "medium" }}
-            >
-              <Text color="white">{deleteError}</Text>
-            </Box>
+          {/* Error */}
+          {fetchError && !showConfirm && (
+            <div className="error-box" style={{ marginBottom: 16 }}>
+              <IconX size={16} />
+              {fetchError}
+            </div>
           )}
 
-          {/* 主内容 */}
-          {(() => {
-            if (loading) {
-              return (
-                <Card pad="large" align="center" className="custom-card">
-                  <Box align="center" gap="medium">
-                    <Spinner size="medium" />
-                    <Text>加载中...</Text>
-                  </Box>
-                </Card>
-              );
-            }
-            if (images.length === 0) {
-              return (
-                <Card pad="large" align="center" className="custom-card">
-                  <Box align="center" gap="medium">
-                    <Text size="large" color="neutral-4">
-                      暂无图片
-                    </Text>
-                    <Text size="small" color="neutral-4">
-                      还没有上传任何图片，去首页上传第一张图片吧！
-                    </Text>
-                    <Link href="/" passHref>
-                      <Button label="去上传" primary />
-                    </Link>
-                  </Box>
-                </Card>
-              );
-            }
-            if (size === "small") {
-              // 移动端卡片布局
-              return (
-                <Box gap="medium">
-                  {images.map((image) => (
-                    <Card key={image.id} pad="medium" className="custom-card">
-                      <Box gap="small">
-                        <Box direction="row" justify="between" align="start">
-                          <Box flex>
-                            <Text weight="bold" truncate>
-                              {image.name}
-                            </Text>
-                            <Text size="small" color="neutral-4">
-                              ID: {image.id}
-                            </Text>
-                            <Text size="small" color="neutral-4">
-                              {image.uploadDate}
-                            </Text>
-                          </Box>
-                          <Box direction="row" gap="xsmall">
-                            <Tip content="复制链接">
-                              <Button
-                                icon={<Copy />}
-                                onClick={() => handleCopyClick(image.url)}
-                                size="small"
-                                className="custom-button"
-                              />
-                            </Tip>
-                            <Tip content="删除图片">
-                              <Button
-                                icon={<Trash />}
-                                onClick={() => handleDeleteClick(image.id)}
-                                size="small"
-                                color="status-critical"
-                                className="custom-button"
-                              />
-                            </Tip>
-                          </Box>
-                        </Box>
-
-                        <Box
-                          align="center"
-                          pad="small"
-                          background="rgba(255,255,255,0.05)"
-                          round="small"
-                        >
-                          <Image
-                            src={image.url}
-                            alt={image.name}
-                            fit="contain"
-                            style={{
-                              maxWidth: "100%",
-                              maxHeight: "200px",
-                              cursor: "pointer",
-                            }}
-                            onClick={() => setPreviewImage(image.url)}
-                          />
-                        </Box>
-                      </Box>
-                    </Card>
+          {/* Content */}
+          {loading ? (
+            <div className="card" style={{ padding: 64, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+              <span className="spinner spinner-lg" />
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>加载中...</p>
+            </div>
+          ) : images.length === 0 && !fetchError ? (
+            <div className="card" style={{ padding: 64, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+              <IconImage size={48} className="text-muted" />
+              <p style={{ color: 'var(--text-secondary)', fontSize: 16 }}>暂无图片</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>去首页上传第一张图片吧</p>
+              <Link href="/" style={{ textDecoration: 'none' }}>
+                <button className="btn btn-primary">去上传</button>
+              </Link>
+            </div>
+          ) : isMobile ? (
+            /* ── Mobile Cards ── */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {images.map((img, idx) => (
+                <div key={img.id} className="card card-hover stagger-item" style={{ padding: 14, animationDelay: `${idx * 0.03}s` }}>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <img
+                      src={img.url}
+                      alt={img.name}
+                      className="table-thumb"
+                      onClick={() => setPreviewImage(img.url)}
+                    />
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+                      <p className="truncate" style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>{img.originalName}</p>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                        #{img.id} · {img.uploadDate}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => handleCopy(img.url)} title="复制">
+                        <IconCopy size={15} />
+                      </button>
+                      <button className="btn btn-danger btn-icon btn-sm" onClick={() => handleDeleteClick(img.id)} title="删除">
+                        <IconTrash size={15} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* ── Desktop Table ── */
+            <div className="card" style={{ overflow: 'hidden' }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 60 }}>ID</th>
+                    <th>文件名</th>
+                    <th style={{ width: 80 }}>预览</th>
+                    <th style={{ width: 150 }}>上传时间</th>
+                    <th style={{ width: 100 }}>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {images.map((img, idx) => (
+                    <tr key={img.id} className="stagger-item" style={{ animationDelay: `${idx * 0.03}s` }}>
+                      <td>
+                        <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                          {img.id}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="truncate" style={{ display: 'block', maxWidth: 260, fontSize: 14 }}>
+                          {img.originalName}
+                        </span>
+                      </td>
+                      <td>
+                        <img
+                          src={img.url}
+                          alt={img.name}
+                          className="table-thumb"
+                          onClick={() => setPreviewImage(img.url)}
+                        />
+                      </td>
+                      <td>
+                        <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                          {img.uploadDate}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn btn-ghost btn-icon btn-sm" onClick={() => handleCopy(img.url)} title="复制链接">
+                            <IconCopy size={15} />
+                          </button>
+                          <button className="btn btn-danger btn-icon btn-sm" onClick={() => handleDeleteClick(img.id)} title="删除">
+                            <IconTrash size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </Box>
-              );
-            }
-            // 桌面端表格布局
-            return (
-              <Card className="custom-card">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableCell scope="col" border="bottom" pad="small">
-                        <Text weight="bold">ID</Text>
-                      </TableCell>
-                      <TableCell scope="col" border="bottom" pad="small">
-                        <Text weight="bold">文件名</Text>
-                      </TableCell>
-                      <TableCell scope="col" border="bottom" pad="small">
-                        <Text weight="bold">预览</Text>
-                      </TableCell>
-                      <TableCell scope="col" border="bottom" pad="small">
-                        <Text weight="bold">上传时间</Text>
-                      </TableCell>
-                      <TableCell scope="col" border="bottom" pad="small">
-                        <Text weight="bold">操作</Text>
-                      </TableCell>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {images.map((image) => (
-                      <TableRow key={image.id}>
-                        <TableCell pad="small">
-                          <Text>{image.id}</Text>
-                        </TableCell>
-                        <TableCell pad="small">
-                          <Text truncate style={{ maxWidth: "200px" }}>
-                            {image.originalName}
-                          </Text>
-                        </TableCell>
-                        <TableCell pad="small">
-                          <Image
-                            src={image.url}
-                            alt={image.name}
-                            className="table-thumbnail"
-                            style={{ pointerEvents: "none" }}
-                          />
-                        </TableCell>
-                        <TableCell pad="small">
-                          <Text size="small">{image.uploadDate}</Text>
-                        </TableCell>
-                        <TableCell pad="small">
-                          <Box direction="row" gap="xsmall">
-                            <Tip content="复制链接">
-                              <Button
-                                icon={<Copy />}
-                                onClick={() => handleCopyClick(image.url)}
-                                size="small"
-                                className="custom-button"
-                              />
-                            </Tip>
-                            <Tip content="删除图片">
-                              <Button
-                                icon={<Trash />}
-                                onClick={() => handleDeleteClick(image.id)}
-                                size="small"
-                                color="status-critical"
-                                className="custom-button"
-                              />
-                            </Tip>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
-            );
-          })()}
-
-          {/* 分页控件 */}
-          {totalItems > itemsPerPage && (
-            <Card
-              pad="medium"
-              margin={{ top: "medium" }}
-              className="custom-card"
-            >
-              <Box align="center" gap="small">
-                <Pagination
-                  numberItems={totalItems}
-                  step={itemsPerPage}
-                  page={currentPage}
-                  onChange={({ page }) => handlePageChange(page)}
-                />
-                <Text size="small" color="neutral-4">
-                  显示 {totalItems === 0 ? 0 : indexOfFirstItem} -{" "}
-                  {indexOfLastItem} 条，共 {totalItems} 条
-                </Text>
-              </Box>
-            </Card>
+                </tbody>
+              </table>
+            </div>
           )}
 
-          {/* 删除确认弹窗 */}
-          {showConfirm && (
-            <Layer
-              position="center"
-              onClickOutside={() => !deleteLoading && setShowConfirm(false)}
-              onEsc={() => !deleteLoading && setShowConfirm(false)}
-            >
-              <Card pad="medium" gap="medium" width="medium">
-                <Heading level={3} margin="none">
-                  确认删除
-                </Heading>
-                <Text>确定要删除这张图片吗？此操作无法撤销。</Text>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="card" style={{ padding: '16px 20px', marginTop: isMobile ? 12 : 20, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div className="pagination">
+                <button
+                  className="pagination-btn"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                >
+                  <IconChevronLeft size={16} />
+                </button>
 
-                {deleteError && (
-                  <Text color="status-critical" size="small">
-                    {deleteError}
-                  </Text>
+                {paginationPages.map((p, i) =>
+                  p === 'dots' ? (
+                    <span key={`dots-${i}`} className="pagination-dots">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      className={`pagination-btn ${p === currentPage ? 'active' : ''}`}
+                      onClick={() => setCurrentPage(p)}
+                    >
+                      {p}
+                    </button>
+                  )
                 )}
 
-                <Box direction="row" gap="medium" justify="end">
-                  <Button
-                    label="取消"
-                    onClick={() => setShowConfirm(false)}
-                    disabled={deleteLoading}
-                    className="custom-button"
-                  />
-                  <Button
-                    label={deleteLoading ? "删除中..." : "删除"}
-                    primary
-                    color="status-critical"
-                    onClick={confirmDelete}
-                    disabled={deleteLoading}
-                    icon={deleteLoading ? <Spinner size="small" /> : <Trash />}
-                    className="custom-button"
-                  />
-                </Box>
-              </Card>
-            </Layer>
-          )}
+                <button
+                  className="pagination-btn"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                >
+                  <IconChevronRight size={16} />
+                </button>
+              </div>
 
-          {/* 图片预览弹窗 */}
-          {previewImage && (
-            <Layer
-              onEsc={() => setPreviewImage(null)}
-              onClickOutside={() => setPreviewImage(null)}
-            >
-              <Box
-                pad="medium"
-                align="center"
-                gap="medium"
-                width="large"
-                height="large"
-              >
-                <Box flex align="center" justify="center">
-                  <Image
-                    src={previewImage}
-                    alt="图片预览"
-                    style={{
-                      maxWidth: "90vw",
-                      maxHeight: "80vh",
-                      objectFit: "contain",
-                    }}
-                  />
-                </Box>
-              </Box>
-            </Layer>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                显示 {indexFirst} - {indexLast} 条，共 {totalItems} 条
+              </p>
+            </div>
           )}
+        </div>
 
-          {/* 复制成功通知 */}
-          {copyVisible && (
-            <Notification
-              toast
-              status="normal"
-              time={2000}
-              title="链接已复制到剪贴板"
-              onClose={() => setCopyVisible(false)}
-            />
-          )}
-        </Box>
-      )}
-    </ResponsiveContext.Consumer>
+        {/* Delete Confirmation Modal */}
+        <Modal open={showConfirm} onClose={() => !deleteLoading && setShowConfirm(false)} width="380px">
+          <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <h3 className="text-display" style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>确认删除</h3>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+              确定要删除这张图片吗？此操作无法撤销。
+            </p>
+            {deleteError && <div className="error-box">{deleteError}</div>}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button className="btn btn-ghost" onClick={() => setShowConfirm(false)} disabled={deleteLoading}>
+                取消
+              </button>
+              <button className="btn btn-danger-solid" onClick={confirmDelete} disabled={deleteLoading}>
+                {deleteLoading ? <span className="spinner spinner-sm" /> : <IconTrash size={16} />}
+                {deleteLoading ? '删除中...' : '删除'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Image Preview Modal */}
+        <Modal open={!!previewImage} onClose={() => setPreviewImage(null)}>
+          <div style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {previewImage && (
+              <img src={previewImage} alt="预览" className="preview-image-lg" />
+            )}
+          </div>
+        </Modal>
+
+        <Toast toasts={toasts} onRemove={removeToast} />
+      </div>
+    </>
   );
 };
 
