@@ -241,30 +241,49 @@ export class D1ImageDB {
 
 
 
-// 使用 Cloudflare API 直接操作 D1 数据库的类
-import Cloudflare from 'cloudflare';
-
+// 使用 Cloudflare REST API 直接操作 D1 数据库的类（无需 SDK，避免 esbuild 打包问题）
 export class CloudflareD1Client {
   private accountId: string;
   private databaseId: string;
-  private cf: Cloudflare;
+  private apiToken: string;
 
   constructor(accountId: string, apiToken: string, databaseId: string) {
     this.accountId = accountId;
     this.databaseId = databaseId;
-    this.cf = new Cloudflare({ apiToken });
+    this.apiToken = apiToken;
   }
 
   async query(sql: string, params: unknown[] = []): Promise<{ results?: unknown[]; success?: boolean; meta?: { last_row_id?: number } }> {
     try {
-      const page = await this.cf.d1.database.query(this.databaseId, {
-        account_id: this.accountId,
-        sql,
-        params: params as string[],
-      });
-      // SDK returns a SinglePage<QueryResult> with `result` array
-      // Gracefully handle empty result sets
-      const first = page.result?.[0];
+      const resp = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${this.accountId}/d1/database/${this.databaseId}/query`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sql, params }),
+        }
+      );
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+      }
+
+      const data = await resp.json() as {
+        result?: Array<{ results?: unknown[]; success?: boolean; meta?: { last_row_id?: number } }>;
+        success?: boolean;
+        errors?: Array<{ message: string }>;
+      };
+
+      if (!data.success) {
+        const errMsg = data.errors?.map(e => e.message).join('; ') || 'Unknown API error';
+        throw new Error(errMsg);
+      }
+
+      const first = data.result?.[0];
       if (!first) {
         return { results: [], success: true, meta: {} };
       }
