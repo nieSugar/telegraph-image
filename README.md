@@ -2,17 +2,125 @@
 
 ## 项目简介
 
-Telegraph Image 是一个用于图片上传与管理的网络应用。用户可以轻松上传图片到Telegraph服务并获取永久链接，方便在各种平台分享和使用。
+Telegraph Image 是一个基于 `Next.js` 和 `Cloudflare Workers` 的图床应用。图片上传后会转存到 Telegram，并把元数据记录到 Cloudflare D1，最终通过站点自己的 `/api/cfile/:id` 链接对外分发。
 
-## 部署Vercel
-1. 进入vercel dashboard中点击Add New
-1. 点击 Import Third-Party Git Repository
-1. 输入 https://github.com/nieSugar/telegraph-image 并点击 Continue
-1. 点击 Create 等待完成
-1. 点击 COntinue to Dashboard 进入
-1. 点击 Setting => Environments 环境变量
-USER_NAME
-PASSWORD
+## 部署到 Cloudflare
+
+### 1. 前置条件
+
+- Cloudflare 账号
+- Telegram Bot Token 和目标 Chat ID
+- 一个已经创建好的 Cloudflare D1 数据库
+- Node.js 20+ 和 `pnpm`
+
+### 2. 安装依赖
+
+```bash
+git clone https://github.com/nieSugar/telegraph-image.git
+cd telegraph-image
+pnpm install
+```
+
+### 3. 配置环境变量
+
+复制 `./.env.example` 为 `./.env`，至少补齐下面这些值：
+
+- `TG_BOT_TOKEN`
+- `TG_CHAT_ID`
+- `CF_ACCOUNT_ID`
+- `CF_API_TOKEN`
+- `CF_DATABASE_ID`
+- `USER_NAME`
+- `PASSWORD`
+
+说明：
+
+- `TG_BOT_TOKEN`：从 `@BotFather` 获取
+- `TG_CHAT_ID`：目标私聊、群组或频道的 `chat_id`
+- `CF_ACCOUNT_ID`：Cloudflare 账号 ID
+- `CF_API_TOKEN`：至少具备 D1 读写权限的 API Token
+- `CF_DATABASE_ID`：D1 数据库 ID
+
+### 4. 初始化 D1 数据库
+
+先在 Cloudflare 控制台创建 D1 数据库，然后执行 `sql/init.sql` 初始化表结构。
+
+如果你已经在 `wrangler.jsonc` 中配置好了 D1 binding，可以直接用 `wrangler` 执行：
+
+```bash
+pnpm wrangler d1 execute <your-database-name> --file=./sql/init.sql --remote
+```
+
+如果还没配 binding，也可以先在 Cloudflare Dashboard 的 D1 控制台手动执行 `sql/init.sql`。
+
+### 5. 配置 `wrangler.jsonc`
+
+当前仓库里的 `wrangler.jsonc` 只包含基础 Worker 和静态资源配置。要让 Cloudflare 预览和部署环境能访问 D1，你还需要补上 `d1_databases` binding。
+
+参考配置如下：
+
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "telegraph-image",
+  "compatibility_date": "2025-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "<your-database-name>",
+      "database_id": "<your-database-id>"
+    }
+  ]
+}
+```
+
+注意：
+
+- `binding` 名称需要和代码里使用的数据库 binding 保持一致
+- `database_id` 必须是 D1 的真实 UUID
+- 本地 `next dev` 主要依赖 `.env` 里的 `CF_*` 变量；Cloudflare 预览和线上环境还需要正确配置 D1 binding
+
+### 6. 本地开发
+
+```bash
+pnpm dev
+```
+
+默认访问地址：
+
+- `http://localhost:3200`
+
+### 7. Cloudflare 构建与预览
+
+```bash
+pnpm build:cf
+pnpm preview:cf
+```
+
+说明：
+
+- `pnpm build:cf` 会通过 `@opennextjs/cloudflare` 生成 `.open-next/worker.js`
+- `pnpm preview:cf` 用于本地模拟 Cloudflare Worker 运行时
+- Windows 下 `OpenNext` 预览偶尔会出现不稳定行为，优先推荐在 `WSL` 或类 Unix 环境下验证
+
+### 8. 部署到 Cloudflare
+
+```bash
+pnpm deploy
+```
+
+部署前建议先确认：
+
+- `pnpm build:cf` 已通过
+- D1 binding 已配置
+- `.env` 中的 Telegram 与管理后台变量完整
+- D1 表结构已初始化
 
 ## 功能特点
 
@@ -25,21 +133,21 @@ PASSWORD
 
 ## 技术栈
 
-- **前端框架**: React 18
-- **服务端框架**: Next.js 14
+- **前端/服务端框架**: Next.js 15
+- **运行时**: Cloudflare Workers
+- **数据库**: Cloudflare D1
+- **对象存储方案**: Telegram Bot API
 - **类型检查**: TypeScript
-- **UI组件库**: Grommet
-- **样式解决方案**: Styled Components
-- **HTTP请求**: Axios
+- **HTTP 请求**: Axios / Fetch
+- **文件上传解析**: Formidable
 - **代码检查**: ESLint
-- **表单处理**: Formidable
 
 ## 开始使用
 
 ### 前提条件
 
-- Node.js 18.x 或更高版本
-- npm 或 Yarn 包管理器
+- Node.js 20.x 或更高版本
+- pnpm
 
 ### 安装
 
@@ -51,73 +159,51 @@ git clone https://github.com/nieSugar/telegraph-image.git
 cd telegraph-image
 
 # 安装依赖
-npm install
-# 或
-yarn install
+pnpm install
 ```
 
 ### 开发
 
 ```bash
 # 启动开发服务器
-npm run dev
-# 或
-yarn dev
+pnpm dev
 ```
 
 ### 构建
 
 ```bash
-# 生产环境构建
-npm run build
-# 或
-yarn build
+# Next.js 构建
+pnpm build
 
-# 启动生产服务器
-npm run start
-# 或
-yarn start
+# OpenNext Cloudflare 构建
+pnpm build:cf
+
+# 本地预览 Cloudflare Worker
+pnpm preview:cf
 ```
 
 ### 代码检查
 
 ```bash
 # 运行 ESLint 检查
-npm run lint
-# 或
-yarn lint
+pnpm lint
 ```
 
 ## 项目结构
 
 ```
 telegraph-image/
-├── public/               # 静态资源
-├── src/                  # 源代码
-│   ├── components/       # 可复用组件
-│   │   └── ProtectedRoute.tsx  # 路由保护组件
-│   ├── contexts/         # React上下文
-│   │   ├── AuthContext.tsx  # 认证上下文提供者
-│   │   ├── AuthContextType.ts # 认证上下文类型定义
-│   │   └── useAuth.ts    # 认证钩子
-│   ├── pages/            # Next.js页面组件
-│   │   ├── _app.tsx      # 应用入口
-│   │   ├── index.tsx     # 首页路由
-│   │   ├── login.tsx     # 登录页路由
-│   │   ├── admin.tsx     # 管理页路由(受保护)
-│   │   ├── HomePage.tsx  # 首页组件
-│   │   ├── LoginPage.tsx # 登录页组件
-│   │   ├── AdminPage.tsx # 管理页组件
-│   │   └── api/          # API端点
-│   │       ├── auth/     # 认证相关API
-│   │       │   └── login.ts # 登录API
-│   │       └── upload/   # 上传相关API
-│   │           └── image.ts # 图片上传API
-│   └── utils/            # 工具函数
-│       └── authUtils.ts  # 认证相关工具函数
-├── next.config.js        # Next.js配置
-├── package.json          # 项目依赖
-└── tsconfig.json         # TypeScript配置
+├── sql/init.sql              # D1 初始化脚本
+├── src/
+│   ├── pages/                # Next.js 页面与 API 路由
+│   ├── services/telegram.ts  # Telegram 上传与文件读取
+│   ├── utils/db.ts           # D1 与 Cloudflare 数据访问
+│   ├── components/           # UI 组件
+│   └── types/                # 类型定义
+├── open-next.config.ts       # OpenNext Cloudflare 配置
+├── wrangler.jsonc            # Cloudflare Worker 配置
+├── next.config.js            # Next.js 配置
+└── .env.example              # 环境变量示例
 ```
 
 ## API 端点
@@ -150,7 +236,7 @@ telegraph-image/
 
 ### 图片上传 API
 
-**上传图片到Telegraph**
+**上传图片并返回站内可访问链接**
 - 路径: `/api/upload/image`
 - 方法: `POST`
 - 请求格式: `multipart/form-data`
@@ -160,7 +246,7 @@ telegraph-image/
   ```json
   {
     "success": true,
-    "urls": ["https://telegra.ph/file/xxxx.jpg"]
+    "urls": ["https://your-domain.example/api/cfile/<telegram-file-id>"]
   }
   ```
   或
@@ -171,37 +257,34 @@ telegraph-image/
   }
   ```
 
-## 第三方 API 调用
+## 第三方服务
 
-该应用使用Telegraph API来上传图片:
+该项目依赖以下外部服务：
 
-- Telegraph图片上传API: `https://telegra.ph/upload`
+- Telegram Bot API：用于图片上传和文件回源
+- Cloudflare D1：用于保存图片元数据
+- Cloudflare Workers：用于运行 API 和静态站点
 
-## 自定义和扩展
+## 故障排查
 
-### 添加新的API端点
+### 访问预览地址时出现 `Internal Server Error`
 
-在`src/pages/api`目录下创建新的文件或目录来添加更多API端点。例如，添加获取上传历史的API:
+- 检查 `wrangler.jsonc` 是否配置了 `d1_databases`
+- 检查 `.env` 中的 `TG_BOT_TOKEN`、`TG_CHAT_ID`、`CF_ACCOUNT_ID`、`CF_API_TOKEN`、`CF_DATABASE_ID`
+- 确认 D1 已执行 `sql/init.sql`
+- 先执行一次 `pnpm build:cf`，再执行 `pnpm preview:cf`
 
-```typescript
-// src/pages/api/history/uploads.ts
-import type { NextApiRequest, NextApiResponse } from 'next';
+### `pnpm build:cf` 构建失败
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  // 实现获取上传历史的逻辑
-}
-```
+- 先执行 `pnpm install`
+- 确认依赖版本与 `@opennextjs/cloudflare` 兼容
+- 如果是在 Windows 下构建，优先用 `WSL` 复现和排查
 
-### 调用其他第三方API
+### 上传失败或文件回源失败
 
-要添加对其他第三方API的调用，可以在API端点中使用axios:
-
-```typescript
-import axios from 'axios';
-
-// 在API处理函数中
-const response = await axios.get('https://api.example.com/data');
-```
+- 检查 Telegram Bot 是否已被加入目标聊天
+- 检查 `TG_CHAT_ID` 是否填写正确
+- 检查 Bot 是否有向目标聊天发消息的权限
 
 ## 贡献指南
 
