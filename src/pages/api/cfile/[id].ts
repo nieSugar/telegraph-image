@@ -1,6 +1,32 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import path from 'path';
 import { buildTelegramFileUrl, getTelegramFilePath } from '../../../services/telegram';
 import { createD1Connection } from '../../../utils/db';
+
+const MIME_MAP: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+  '.svg': 'image/svg+xml', '.avif': 'image/avif', '.heic': 'image/heic',
+  '.tiff': 'image/tiff', '.ico': 'image/x-icon',
+  '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.avi': 'video/x-msvideo',
+  '.mkv': 'video/x-matroska', '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
+  '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac',
+  '.pdf': 'application/pdf',
+};
+
+function inferContentType(...sources: (string | null | undefined)[]): string | null {
+  for (const src of sources) {
+    if (!src) continue;
+    const ext = path.extname(src).toLowerCase();
+    if (MIME_MAP[ext]) return MIME_MAP[ext];
+  }
+  return null;
+}
+
+function isInlinePreviewable(mime: string): boolean {
+  return mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/') || mime === 'application/pdf';
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -55,14 +81,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const fileBuffer = await fileResponse.arrayBuffer();
-    const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
+
+    const tgContentType = fileResponse.headers.get('content-type') || '';
+    const contentType =
+      inferContentType(imageRecord?.originalName, imageRecord?.name, imageRecord?.tgFileName, filePath)
+      || (tgContentType && tgContentType !== 'application/octet-stream' ? tgContentType : null)
+      || 'application/octet-stream';
 
     // 检查请求头，决定返回格式
     const acceptHeader = req.headers.accept || '';
     const wantsJson = acceptHeader.includes('application/json') || req.query.format === 'json';
 
     if (wantsJson) {
-      // 返回JSON格式的base64数据，包含原始文件名
       const base64Data = Buffer.from(fileBuffer).toString('base64');
       const response: {
         success: boolean;
@@ -79,7 +109,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         size: fileBuffer.byteLength
       };
 
-      // 如果有图片记录，添加文件名信息
       if (imageRecord) {
         response.originalName = imageRecord.originalName;
         response.name = imageRecord.name;
@@ -90,16 +119,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return res.status(200).json(response);
     } else {
-      // 直接返回文件内容（保持向后兼容性）
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Length', fileBuffer.byteLength.toString());
-      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 缓存1年
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
 
-      // 如果有原始文件名，设置 Content-Disposition 头
-      if (imageRecord?.originalName) {
-        const encodedFilename = encodeURIComponent(imageRecord.originalName);
-        res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodedFilename}`);
-      }
+      const displayName = imageRecord?.originalName || imageRecord?.name || path.basename(filePath);
+      const disposition = isInlinePreviewable(contentType) ? 'inline' : 'attachment';
+      const encodedFilename = encodeURIComponent(displayName);
+      res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodedFilename}`);
 
       return res.status(200).send(Buffer.from(fileBuffer));
     }
