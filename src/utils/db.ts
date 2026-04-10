@@ -256,10 +256,6 @@ type CloudflareRuntimeEnv = {
 };
 
 function getWorkerD1Binding(): { db: D1Database | null; isCloudflareRuntime: boolean } {
-  if (typeof globalThis.DB !== 'undefined') {
-    return { db: globalThis.DB, isCloudflareRuntime: true };
-  }
-
   try {
     const { env } = getCloudflareContext();
     return {

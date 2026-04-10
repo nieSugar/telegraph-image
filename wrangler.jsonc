@@ -7,12 +7,5 @@
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "tg-img",
-      "database_id": "12a2b0ef-ea96-4afe-ac5b-7f9218db83e9"
-    }
-  ]
+  }
 }
