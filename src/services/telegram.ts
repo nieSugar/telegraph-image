@@ -29,6 +29,12 @@ function extractFileFromTelegramMessage(response: TelegramResponse): TelegramFil
     if (result?.audio) {
       return { file_id: result.audio.file_id, file_name: result.audio.file_name || result.audio.file_unique_id };
     }
+    if (result?.sticker) {
+      return { file_id: result.sticker.file_id, file_name: result.sticker.file_name || result.sticker.file_unique_id };
+    }
+    if (result?.animation) {
+      return { file_id: result.animation.file_id, file_name: result.animation.file_name || result.animation.file_unique_id };
+    }
     return null;
   } catch {
     return null;

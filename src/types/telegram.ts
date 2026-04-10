@@ -34,6 +34,16 @@ export interface TelegramResponse {
       file_name?: string; 
       file_unique_id: string;
     };
+    sticker?: {
+      file_id: string;
+      file_name?: string;
+      file_unique_id: string;
+    };
+    animation?: {
+      file_id: string;
+      file_name?: string;
+      file_unique_id: string;
+    };
   };
 }
 
