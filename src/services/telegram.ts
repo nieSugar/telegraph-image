@@ -10,7 +10,7 @@ import {
 function resolveEndpointByMime(contentType: string | undefined | null): EndpointResolution {
   const ct = (contentType || '').toLowerCase();
   const map: Array<{ prefix: string; endpoint: EndpointResolution['endpoint']; fieldName: TelegramFileKind }> = [
-    { prefix: 'image/', endpoint: 'sendPhoto', fieldName: 'photo' },
+    { prefix: 'image/', endpoint: 'sendDocument', fieldName: 'document' },
     { prefix: 'video/', endpoint: 'sendVideo', fieldName: 'video' },
     { prefix: 'audio/', endpoint: 'sendAudio', fieldName: 'audio' },
     { prefix: 'application/pdf', endpoint: 'sendDocument', fieldName: 'document' },
