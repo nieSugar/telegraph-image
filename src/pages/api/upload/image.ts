@@ -75,19 +75,24 @@ export default async function handler(
     // 使用formidable解析上传的文件，并配置选项
     const form = formidable({
       keepExtensions: true,
-      maxFileSize: 10 * 1024 * 1024, // 限制10MB
+      maxFileSize: 20 * 1024 * 1024, // Telegram getFile 下载上限 20MB
       maxFiles: 1, // 限制单次只能上传一个文件
       allowEmptyFiles: false,
       filter: (part) => {
-        // 只允许图片文件
-        if (!part.mimetype?.includes('image/')) {
+        const mime = (part.mimetype || '').toLowerCase();
+        const allowedMimePrefixes = ['image/', 'video/', 'audio/', 'application/pdf'];
+        if (!allowedMimePrefixes.some(p => mime.startsWith(p))) {
           console.log('Rejected file due to invalid MIME type:', part.mimetype);
           return false;
         }
 
-        // 验证文件扩展名
         const originalFilename = part.originalFilename || '';
-        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+        const allowedExtensions = [
+          '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.avif', '.heic', '.tiff',
+          '.mp4', '.mov', '.avi', '.mkv', '.webm',
+          '.mp3', '.ogg', '.flac', '.wav', '.m4a', '.aac',
+          '.pdf',
+        ];
         const hasAllowedExtension = allowedExtensions.some(ext =>
           originalFilename.toLowerCase().endsWith(ext)
         );
@@ -110,7 +115,7 @@ export default async function handler(
       if (error && typeof error === 'object' && 'code' in error && error.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({
           success: false,
-          message: '文件大小超过限制（最大10MB）'
+          message: '文件大小超过限制（最大20MB）'
         });
       }
 

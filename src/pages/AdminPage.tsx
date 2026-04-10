@@ -46,6 +46,14 @@ function useIsMobile(breakpoint = 768) {
   return mobile;
 }
 
+function getFileMediaType(name: string): 'video' | 'audio' | 'pdf' | 'image' {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'video';
+  if (['mp3', 'ogg', 'flac', 'wav', 'm4a', 'aac'].includes(ext)) return 'audio';
+  if (ext === 'pdf') return 'pdf';
+  return 'image';
+}
+
 const AdminPage: React.FC = () => {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,7 +69,7 @@ const AdminPage: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const { logout } = useAuth();
@@ -258,12 +266,15 @@ const AdminPage: React.FC = () => {
               {images.map((img, idx) => (
                 <div key={img.id} className="card card-hover stagger-item" style={{ padding: 14, animationDelay: `${idx * 0.03}s` }}>
                   <div style={{ display: 'flex', gap: 12 }}>
-                    <img
-                      src={img.url}
-                      alt={img.name}
-                      className="table-thumb"
-                      onClick={() => setPreviewImage(img.url)}
-                    />
+                    {getFileMediaType(img.originalName) === 'video' ? (
+                      <video src={img.url} className="table-thumb" muted onClick={() => setPreviewImage({ url: img.url, name: img.originalName })} />
+                    ) : getFileMediaType(img.originalName) === 'audio' ? (
+                      <div className="table-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }} onClick={() => setPreviewImage({ url: img.url, name: img.originalName })}>🎵</div>
+                    ) : getFileMediaType(img.originalName) === 'pdf' ? (
+                      <div className="table-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }} onClick={() => setPreviewImage({ url: img.url, name: img.originalName })}>📄</div>
+                    ) : (
+                      <img src={img.url} alt={img.name} className="table-thumb" onClick={() => setPreviewImage({ url: img.url, name: img.originalName })} />
+                    )}
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
                       <p className="truncate" style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>{img.originalName}</p>
                       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
@@ -309,12 +320,15 @@ const AdminPage: React.FC = () => {
                         </span>
                       </td>
                       <td>
-                        <img
-                          src={img.url}
-                          alt={img.name}
-                          className="table-thumb"
-                          onClick={() => setPreviewImage(img.url)}
-                        />
+                        {getFileMediaType(img.originalName) === 'video' ? (
+                          <video src={img.url} className="table-thumb" muted onClick={() => setPreviewImage({ url: img.url, name: img.originalName })} />
+                        ) : getFileMediaType(img.originalName) === 'audio' ? (
+                          <div className="table-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }} onClick={() => setPreviewImage({ url: img.url, name: img.originalName })}>🎵</div>
+                        ) : getFileMediaType(img.originalName) === 'pdf' ? (
+                          <div className="table-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }} onClick={() => setPreviewImage({ url: img.url, name: img.originalName })}>📄</div>
+                        ) : (
+                          <img src={img.url} alt={img.name} className="table-thumb" onClick={() => setPreviewImage({ url: img.url, name: img.originalName })} />
+                        )}
                       </td>
                       <td>
                         <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
@@ -400,11 +414,19 @@ const AdminPage: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Image Preview Modal */}
+        {/* Preview Modal */}
         <Modal open={!!previewImage} onClose={() => setPreviewImage(null)}>
           <div style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {previewImage && (
-              <img src={previewImage} alt="预览" className="preview-image-lg" />
+              getFileMediaType(previewImage.name) === 'video' ? (
+                <video src={previewImage.url} controls autoPlay className="preview-image-lg" style={{ maxHeight: '70vh' }} />
+              ) : getFileMediaType(previewImage.name) === 'audio' ? (
+                <audio src={previewImage.url} controls autoPlay style={{ width: '100%' }} />
+              ) : getFileMediaType(previewImage.name) === 'pdf' ? (
+                <iframe src={previewImage.url} style={{ width: '100%', height: '70vh', border: 'none', borderRadius: 8 }} />
+              ) : (
+                <img src={previewImage.url} alt="预览" className="preview-image-lg" />
+              )
             )}
           </div>
         </Modal>

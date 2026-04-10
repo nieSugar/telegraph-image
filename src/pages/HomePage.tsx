@@ -49,14 +49,15 @@ const HomePage: React.FC = () => {
 
   const processFile = useCallback(
     (selectedFile: File) => {
-      if (!selectedFile.type.startsWith('image/')) {
-        setError('请选择图片文件');
+      const allowedTypes = ['image/', 'video/', 'audio/', 'application/pdf'];
+      if (!allowedTypes.some(t => selectedFile.type.startsWith(t))) {
+        setError('不支持的文件类型，请选择图片、视频、音频或 PDF');
         return;
       }
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        setError('文件大小不能超过 10MB');
-        return;
-      }
+      // if (selectedFile.size > 10 * 1024 * 1024) {
+      //   setError('文件大小不能超过 10MB');
+      //   return;
+      // }
       setFile(selectedFile);
       setUploadedUrls([]);
       setError(null);
@@ -178,7 +179,7 @@ const HomePage: React.FC = () => {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*,audio/*,.pdf"
                 onChange={handleFileChange}
                 aria-label="选择图片"
               />
@@ -188,7 +189,7 @@ const HomePage: React.FC = () => {
                   {dragOver ? '释放以选择文件' : '拖放图片到此处'}
                 </p>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-                  或点击选择 · PNG, JPG, GIF · 最大 10MB
+                  或点击选择 · 图片 / 视频 / 音频 / PDF · 最大 20MB
                 </p>
               </div>
             </div>
@@ -197,13 +198,23 @@ const HomePage: React.FC = () => {
             {file && previewUrl && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: '100%', background: 'var(--bg-glass)', border: '1px solid var(--border-faint)', borderRadius: 'var(--radius-md)', padding: 16, display: 'flex', justifyContent: 'center' }}>
-                  <img
-                    src={previewUrl}
-                    alt="预览"
-                    className="preview-image"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => setPreviewModal(true)}
-                  />
+                  {file.type.startsWith('video/') ? (
+                    <video src={previewUrl} controls className="preview-image" style={{ maxHeight: 300 }} />
+                  ) : file.type.startsWith('audio/') ? (
+                    <audio src={previewUrl} controls style={{ width: '100%' }} />
+                  ) : file.type === 'application/pdf' ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
+                      PDF 文件：{file.name}
+                    </div>
+                  ) : (
+                    <img
+                      src={previewUrl}
+                      alt="预览"
+                      className="preview-image"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setPreviewModal(true)}
+                    />
+                  )}
                 </div>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                   {file.name}
